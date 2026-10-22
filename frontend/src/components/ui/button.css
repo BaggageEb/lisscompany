@@ -1,0 +1,100 @@
+.lc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--lc-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--lc-radius-pill);
+  font-family: var(--lc-font-sans);
+  font-weight: var(--lc-weight-semibold);
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--lc-duration-fast) var(--lc-ease),
+    border-color var(--lc-duration-fast) var(--lc-ease),
+    color var(--lc-duration-fast) var(--lc-ease),
+    box-shadow var(--lc-duration-fast) var(--lc-ease),
+    transform var(--lc-duration-fast) var(--lc-ease);
+}
+
+.lc-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.lc-btn:disabled,
+.lc-btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Tamanhos */
+.lc-btn--sm {
+  padding: var(--lc-space-2) var(--lc-space-4);
+  font-size: var(--lc-text-sm);
+}
+.lc-btn--md {
+  padding: var(--lc-space-3) var(--lc-space-6);
+  font-size: var(--lc-text-body);
+}
+.lc-btn--lg {
+  padding: var(--lc-space-4) var(--lc-space-8);
+  font-size: var(--lc-text-body-lg);
+}
+.lc-btn--block {
+  width: 100%;
+}
+
+/* Variantes */
+.lc-btn--primary {
+  background: var(--lc-blue-700);
+  color: var(--lc-ink-inverse);
+  box-shadow: var(--lc-shadow-1);
+}
+.lc-btn--primary:hover:not(:disabled) {
+  background: var(--lc-blue-600);
+  color: var(--lc-ink-inverse);
+  box-shadow: var(--lc-shadow-2);
+}
+
+.lc-btn--secondary {
+  background: transparent;
+  border-color: var(--lc-blue-700);
+  color: var(--lc-blue-700);
+}
+.lc-btn--secondary:hover:not(:disabled) {
+  background: var(--lc-blue-50);
+  color: var(--lc-blue-700);
+}
+
+.lc-btn--gold {
+  background: linear-gradient(135deg, var(--lc-gold-500), var(--lc-gold-600));
+  color: var(--lc-blue-900);
+  box-shadow: var(--lc-shadow-gold);
+}
+.lc-btn--gold:hover:not(:disabled) {
+  filter: brightness(1.06);
+  color: var(--lc-blue-900);
+}
+
+.lc-btn--ghost {
+  background: transparent;
+  color: var(--lc-ink-soft);
+}
+.lc-btn--ghost:hover:not(:disabled) {
+  background: var(--lc-surface-soft);
+  color: var(--lc-ink);
+}
+
+.lc-btn--danger {
+  background: var(--lc-danger-700);
+  color: var(--lc-ink-inverse);
+}
+.lc-btn--danger:hover:not(:disabled) {
+  filter: brightness(1.1);
+  color: var(--lc-ink-inverse);
+}
+
+.lc-btn__label--busy {
+  opacity: 0.85;
+}

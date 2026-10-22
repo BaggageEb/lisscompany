@@ -1,0 +1,187 @@
+.lc-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--lc-z-header);
+  background: color-mix(in srgb, var(--lc-surface) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--lc-border);
+}
+
+.lc-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lc-space-4);
+  min-height: var(--lc-header-height);
+}
+
+/* ---------- Marca ---------- */
+.lc-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-decoration: none;
+  color: var(--lc-blue-800);
+}
+
+.lc-brand__name {
+  font-family: var(--lc-font-serif);
+  font-size: clamp(1.15rem, 1rem + 0.8vw, 1.5rem);
+  font-weight: var(--lc-weight-bold);
+  letter-spacing: 0.12em;
+  line-height: 1;
+  color: var(--lc-blue-700);
+}
+
+.lc-brand__rule {
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--lc-gold-500) 30%, var(--lc-gold-500) 70%, transparent);
+}
+
+.lc-brand__tagline {
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--lc-gold-700);
+}
+
+/* ---------- Navegação ---------- */
+.lc-nav--desktop {
+  display: none;
+  gap: var(--lc-space-6);
+}
+
+.lc-nav__link {
+  position: relative;
+  font-size: var(--lc-text-sm);
+  font-weight: var(--lc-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--lc-ink-soft);
+  padding-block: var(--lc-space-2);
+  transition: color var(--lc-duration-fast) var(--lc-ease);
+}
+
+.lc-nav__link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--lc-gold-500);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--lc-duration-base) var(--lc-ease);
+}
+
+.lc-nav__link:hover {
+  color: var(--lc-blue-700);
+}
+
+.lc-nav__link--active {
+  color: var(--lc-blue-700);
+}
+
+.lc-nav__link--active::after {
+  transform: scaleX(1);
+}
+
+/* ---------- Ações ---------- */
+.lc-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--lc-space-3);
+}
+
+.lc-header__action {
+  font-size: var(--lc-text-sm);
+  font-weight: var(--lc-weight-semibold);
+  text-decoration: none;
+  color: var(--lc-blue-700);
+  padding: var(--lc-space-2) var(--lc-space-3);
+  border-radius: var(--lc-radius-pill);
+  transition: background-color var(--lc-duration-fast) var(--lc-ease);
+}
+
+.lc-header__action:hover {
+  background: var(--lc-blue-50);
+}
+
+/* O «Sair» é um botão (não navega), com o mesmo aspeto das acções. */
+.lc-header__action--button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--lc-text-sm);
+  font-weight: var(--lc-weight-semibold);
+  color: var(--lc-blue-700);
+  padding: var(--lc-space-2) var(--lc-space-3);
+  border-radius: var(--lc-radius-pill);
+  cursor: pointer;
+  transition: background-color var(--lc-duration-fast) var(--lc-ease);
+}
+
+.lc-header__action--button:hover {
+  background: var(--lc-blue-50);
+}
+
+.lc-header__action--cart {
+  background: var(--lc-blue-700);
+  color: var(--lc-ink-inverse);
+}
+
+.lc-header__action--cart:hover {
+  background: var(--lc-blue-600);
+  color: var(--lc-ink-inverse);
+}
+
+.lc-header__menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  background: transparent;
+  border: 1px solid var(--lc-border-strong);
+  border-radius: var(--lc-radius-md);
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: var(--lc-blue-700);
+}
+
+.lc-header__menu-btn:hover {
+  background: var(--lc-surface-soft);
+}
+
+/* ---------- Menu mobile ---------- */
+.lc-nav--mobile {
+  border-top: 1px solid var(--lc-border);
+  background: var(--lc-surface);
+}
+
+.lc-nav--mobile__inner {
+  display: flex;
+  flex-direction: column;
+  padding-block: var(--lc-space-3);
+}
+
+.lc-nav--mobile .lc-nav__link {
+  padding: var(--lc-space-3) 0;
+  border-bottom: 1px solid var(--lc-border);
+}
+
+@media (min-width: 48rem) {
+  .lc-nav--desktop {
+    display: flex;
+  }
+  .lc-header__menu-btn {
+    display: none;
+  }
+  .lc-nav--mobile {
+    display: none;
+  }
+}

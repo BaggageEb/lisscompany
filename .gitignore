@@ -1,0 +1,25 @@
+# Toolchain local (JDK/Maven descarregados nesta máquina)
+.toolchain/
+
+# Dependências e builds
+node_modules/
+dist/
+frontend/dist/
+backend/target/
+coverage/
+*.tsbuildinfo
+
+# Ambiente — nunca versionar segredos
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE / SO
+.idea/
+*.iml
+.vscode/
+.DS_Store

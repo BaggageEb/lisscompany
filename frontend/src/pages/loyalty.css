@@ -1,0 +1,209 @@
+/* ---------- Fidelização (fase 6) ---------- */
+.lc-loyalty__balance {
+  max-width: 46rem;
+  margin-bottom: var(--lc-space-6);
+}
+
+.lc-loyalty__balance h2,
+.lc-loyalty__perks h2,
+.lc-loyalty__history h2 {
+  font-size: var(--lc-text-h3);
+  margin-bottom: var(--lc-space-4);
+}
+
+.lc-loyalty__points {
+  display: flex;
+  align-items: baseline;
+  gap: var(--lc-space-3);
+  margin: 0 0 var(--lc-space-3);
+}
+
+.lc-loyalty__points-value {
+  font-family: var(--lc-font-display);
+  font-size: var(--lc-text-h1);
+}
+
+.lc-loyalty__points-unit {
+  color: var(--lc-ink-soft);
+  font-size: var(--lc-text-body-lg);
+}
+
+.lc-loyalty__equivalence {
+  margin: 0 0 var(--lc-space-3);
+  color: var(--lc-ink-soft);
+  font-size: var(--lc-text-sm);
+}
+
+.lc-loyalty__note {
+  margin: 0;
+  color: var(--lc-ink-soft);
+  font-size: var(--lc-text-sm);
+}
+
+.lc-loyalty__perks,
+.lc-loyalty__history {
+  max-width: 46rem;
+  margin-bottom: var(--lc-space-6);
+}
+
+.lc-loyalty__perk {
+  padding-block: var(--lc-space-3);
+  border-top: 1px solid var(--lc-border);
+}
+
+.lc-loyalty__perk:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.lc-loyalty__perk-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--lc-space-3);
+  margin-bottom: var(--lc-space-2);
+}
+
+.lc-loyalty__perk p {
+  margin: 0;
+  color: var(--lc-ink-soft);
+  font-size: var(--lc-text-sm);
+}
+
+.lc-loyalty__perk-hint {
+  margin-top: var(--lc-space-2) !important;
+  color: var(--lc-ink-faint) !important;
+  font-size: var(--lc-text-xs) !important;
+}
+
+.lc-loyalty__transactions {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lc-space-3);
+}
+
+.lc-loyalty__transactions li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--lc-space-4);
+  padding-block: var(--lc-space-2);
+  border-top: 1px solid var(--lc-border);
+}
+
+.lc-loyalty__transactions li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.lc-loyalty__transaction-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lc-loyalty__transaction-label {
+  font-size: var(--lc-text-sm);
+}
+
+.lc-loyalty__transaction-date {
+  color: var(--lc-ink-faint);
+  font-size: var(--lc-text-xs);
+}
+
+.lc-loyalty__transaction-points {
+  font-weight: var(--lc-weight-medium);
+  font-size: var(--lc-text-sm);
+  white-space: nowrap;
+}
+
+.lc-loyalty__transaction-points--in {
+  color: var(--lc-accent-deep, var(--lc-ink));
+}
+
+.lc-loyalty__actions {
+  margin-bottom: var(--lc-space-12);
+}
+
+/* ---------- Checkout: secção de fidelização (fase 6) ---------- */
+.lc-checkout__loyalty {
+  margin-block: var(--lc-space-5);
+}
+
+.lc-checkout__loyalty h2 {
+  font-size: var(--lc-text-h3);
+  margin-bottom: var(--lc-space-3);
+}
+
+.lc-checkout__loyalty-note {
+  margin: 0;
+  color: var(--lc-ink-soft);
+  font-size: var(--lc-text-sm);
+}
+
+.lc-checkout__loyalty-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lc-space-3);
+  margin-top: var(--lc-space-3);
+}
+
+.lc-checkout__loyalty-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--lc-space-3);
+  padding: var(--lc-space-3);
+  border: 1px solid var(--lc-border);
+  border-radius: var(--lc-radius-md);
+}
+
+.lc-checkout__loyalty-option input[type='checkbox'] {
+  margin-top: 4px;
+}
+
+.lc-checkout__loyalty-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lc-checkout__loyalty-option-body label {
+  font-weight: var(--lc-weight-medium);
+  font-size: var(--lc-text-sm);
+}
+
+.lc-checkout__loyalty-option-hint {
+  color: var(--lc-ink-faint);
+  font-size: var(--lc-text-xs);
+}
+
+.lc-checkout__loyalty-points-input {
+  display: flex;
+  align-items: center;
+  gap: var(--lc-space-2);
+  margin-top: var(--lc-space-2);
+}
+
+.lc-checkout__loyalty-points-input input {
+  font: inherit;
+  width: 7rem;
+  color: var(--lc-ink);
+  background: var(--lc-surface);
+  border: 1px solid var(--lc-border-strong);
+  border-radius: var(--lc-radius-md);
+  padding: var(--lc-space-2);
+}
+
+.lc-checkout__loyalty-points-input input:focus-visible {
+  outline: 2px solid var(--lc-focus-ring);
+  outline-offset: 1px;
+}
+
+.lc-checkout__loyalty-error {
+  margin: var(--lc-space-3) 0 0;
+  color: var(--lc-danger-700);
+  font-size: var(--lc-text-sm);
+}

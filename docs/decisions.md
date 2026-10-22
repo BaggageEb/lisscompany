@@ -1,0 +1,23 @@
+# Decisões pendentes
+
+Cada decisão comercial que **não foi tomada** pela proprietária é registada aqui com a sua consequência técnica. Nenhuma é substituída por um valor fictício apresentado como real.
+
+| # | Decisão pendente | Consequência técnica | Como será resolvida |
+|---|---|---|---|
+| 1 | Catálogo inicial: produtos, imagens, descrições, preços | Tabela `product` existe com seed de DEMONSTRAÇÃO (V3) — será substituído pelos dados reais | Proprietária fornece dados → seed controlado |
+| 2 | Quantidades/unitades iniciais de stock e consumos por receita | **Painel activo na fase 7**: ajuste manual por produto (a primeira entrada positiva cria a linha de inventário; movimentos `INITIAL_SETUP`/`MANUAL_ADJUSTMENT` auditados); produtos sem linha continuam ilimitados e **não há consumo automático por receita** (bolos não baixam ingredientes) | Consumo por receita continua por decidir |
+| 3 | Zonas, tarifas, horários e prazos de entrega; local de levantamento | Checkout mostrará modalidades mas sem valores; nada de moradas ou preços inventados | `delivery_zone`/`delivery_rule` configuráveis |
+| 4 | Fornecedor de pagamentos automáticos | Fluxo actual: método escolhido + validação manual por conta autorizada (**activo na fase 5**: `POST /api/v1/admin/payments/{ordem}/review`, idempotente) | Integração só com API/credenciais confirmadas |
+| 5 | Processo de validação de transferências e Multicaixa | Estados `PENDING` → `PAID` por revisão manual (**activo na fase 5**, com auditoria); envio de comprovativo por activar | Definição de política + UI de comprovativo |
+| 6 | Momento da reserva e baixa definitiva de stock | **Implementado na fase 5**: reserva ao criar encomenda, baixa ao confirmar pagamento (`StockReservation`); `expires_at` fica NULL — sem prazo inventado | Confirmar prazo de expiração com a proprietária |
+| 7 | Prazos de cancelamento e regras de reembolso | Cancelamento antes de `CONFIRMED` automático (**activo na fase 5**: cliente cancela via API; depois exige conta autorizada); sem reembolso automático implícito | Política a definir |
+| 8 | Taxa de conversão pontos↔Kz, precisão e arredondamento | **Implementado na fase 6**: `LoyaltyRule` guarda taxa, arredondamento e resgate parcial/total, configurável pela API administrativa — sem defaults presumidos | Editável no painel (secção Fidelização, activo na fase 7) |
+| 9 | Efeito de alterar a conversão sobre pontos existentes | **Implementado na fase 6 com pontos invariantes**: cada movimento guarda a taxa em vigor (`rate_kind`/`rate_used` em `loyalty_transaction`); revalorizar pontos antigos exigiria decisão explícita | Decisão explícita da proprietária só se quiser revalorizar |
+| 10 | Consumo de pontos ao resgatar (total vs parcial) | **Implementado na fase 6**: `allowPartialRedemption` em `LoyaltyRule` escolhe resgate total ou parcial; o resgate nunca excede o saldo nem o valor da encomenda | Editável no painel (secção Fidelização, activo na fase 7) |
+| 11 | Prioridade entre desconto de boas-vindas e recompensa | **Resolvida na fase 6**: exactamente UM desconto por encomenda; a escolha explícita do cliente (pontos OU recompensa) vence o automático de boas-vindas, e dois pedidos explícitos são rejeitados (422) — política em `LoyaltyService.evaluate` | `DiscountRule.priority` editável no painel (activo na fase 7) |
+| 12 | Valores de descontos/brindes e validade das recompensas | **Valores modelados na fase 6**: `RewardRule` com `discount_amount`, `min_points`, `min_orders`, `max_per_customer`, `active` — sem valores por omissão; a **validade** (período de utilização) continua por definir — a meta de 10.000 Kz é só um conceito | Editáveis no painel (activo na fase 7) + definir validade |
+| 13 | Nº mínimo de encomendas para a recompensa cumulativa | **Implementado na fase 6**: `RewardRule.min_orders` combinado com `min_points` (a tabela exige pelo menos uma das condições) | Editável no painel (activo na fase 7) |
+| 14 | Se a recompensa da meta é a mesma da cumulativa | Modelaremos `RewardRule` distintos mas relacionáveis; a ligação é configuração | Confirmação da proprietária |
+| 15 | Requisitos legais, fiscais e políticas finais | Páginas de políticas mostram marcador “em construção”; nada de texto legal inventado | Texto aprovado + validação legal |
+| 16 | Logótipo e recursos gráficos finais | Usa-se wordmark tipográfico + paleta; placeholders facilmente substituíveis | Ficheiros finais fornecidos |
+| 17 | Morada, horários, contactos e fuso horário oficiais | Contactos não publicados; nada de dados fictícios — o painel da fase 7 cobre encomendas, pagamentos, inventário e fidelização; os contactos continuam por configurar | Definições da loja (próximo bloco do painel) |

@@ -1,0 +1,125 @@
+/* =====================================================================
+   LISSCOMPANY Design System — Tokens
+   Fonte única de verdade para cor, tipografia, espaço, raios, sombras,
+   motion e elevação. Nenhum componente define valores mágicos.
+   Paleta: azul real + dourado elegante + branco quente (a validar com o
+   logótipo final).
+   ===================================================================== */
+
+:root {
+  /* ---------- Marca ---------- */
+  --lc-blue-900: #0a2554;
+  --lc-blue-800: #0c2a62;
+  --lc-blue-700: #123d8d; /* azul real — cor principal */
+  --lc-blue-600: #1a4cab;
+  --lc-blue-500: #2a5ab5;
+  --lc-blue-100: #e4ebf7;
+  --lc-blue-50: #f2f6fc;
+
+  --lc-gold-700: #a8871f;
+  --lc-gold-600: #b8952a;
+  --lc-gold-500: #d4af37; /* dourado elegante — acento */
+  --lc-gold-300: #e6cf86;
+  --lc-gold-100: #f7edcc;
+  --lc-gold-50: #fbf6e7;
+
+  /* ---------- Superfícies ---------- */
+  --lc-surface: #fffdf8; /* branco quente */
+  --lc-surface-soft: #f7f1e8; /* creme suave */
+  --lc-surface-muted: #efe9df;
+  --lc-surface-inverse: var(--lc-blue-800);
+
+  /* ---------- Texto ---------- */
+  --lc-ink: #241d1a; /* texto escuro */
+  --lc-ink-soft: #5c534e;
+  --lc-ink-faint: #8a8078;
+  --lc-ink-inverse: #fffdf8;
+
+  /* ---------- Linhas e bordas ---------- */
+  --lc-border: #e6ddcf;
+  --lc-border-strong: #d2c5b2;
+  --lc-border-inverse: rgb(255 253 248 / 22%);
+
+  /* ---------- Estados ---------- */
+  --lc-success-700: #1f5c3b;
+  --lc-success-100: #dff0e6;
+  --lc-warning-700: #8a5a10;
+  --lc-warning-100: #f9ecd2;
+  --lc-danger-700: #9c2018;
+  --lc-danger-100: #f8e2e0;
+
+  --lc-focus-ring: var(--lc-gold-500);
+
+  /* ---------- Tipografia ---------- */
+  --lc-font-serif: 'Playfair Display Variable', 'Iowan Old Style', Georgia, serif;
+  --lc-font-sans: 'DM Sans Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --lc-text-display: clamp(2.5rem, 1.6rem + 4vw, 4.25rem);
+  --lc-text-h1: clamp(2rem, 1.4rem + 2.6vw, 3rem);
+  --lc-text-h2: clamp(1.6rem, 1.2rem + 1.8vw, 2.25rem);
+  --lc-text-h3: clamp(1.25rem, 1.1rem + 0.8vw, 1.5rem);
+  --lc-text-body-lg: 1.125rem;
+  --lc-text-body: 1rem;
+  --lc-text-sm: 0.875rem;
+  --lc-text-xs: 0.75rem;
+
+  --lc-leading-tight: 1.15;
+  --lc-leading-snug: 1.35;
+  --lc-leading-normal: 1.6;
+
+  --lc-weight-regular: 400;
+  --lc-weight-medium: 500;
+  --lc-weight-semibold: 600;
+  --lc-weight-bold: 700;
+
+  /* ---------- Espaço (escala 4px) ---------- */
+  --lc-space-1: 0.25rem;
+  --lc-space-2: 0.5rem;
+  --lc-space-3: 0.75rem;
+  --lc-space-4: 1rem;
+  --lc-space-5: 1.25rem;
+  --lc-space-6: 1.5rem;
+  --lc-space-8: 2rem;
+  --lc-space-10: 2.5rem;
+  --lc-space-12: 3rem;
+  --lc-space-16: 4rem;
+  --lc-space-20: 5rem;
+
+  /* ---------- Raios ---------- */
+  --lc-radius-sm: 6px;
+  --lc-radius-md: 12px;
+  --lc-radius-lg: 18px;
+  --lc-radius-xl: 28px;
+  --lc-radius-pill: 999px;
+
+  /* ---------- Sombras (elevação) ---------- */
+  --lc-shadow-1: 0 1px 2px rgb(36 29 26 / 6%), 0 2px 8px rgb(36 29 26 / 5%);
+  --lc-shadow-2: 0 2px 4px rgb(36 29 26 / 7%), 0 8px 24px rgb(36 29 26 / 9%);
+  --lc-shadow-3: 0 4px 8px rgb(36 29 26 / 9%), 0 20px 48px rgb(18 61 141 / 14%);
+  --lc-shadow-gold: 0 2px 10px rgb(212 175 55 / 25%);
+
+  /* ---------- Motion ---------- */
+  --lc-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --lc-duration-fast: 140ms;
+  --lc-duration-base: 240ms;
+  --lc-duration-slow: 420ms;
+
+  /* ---------- Layout ---------- */
+  --lc-container-max: 76rem;
+  --lc-header-height: 4.25rem;
+  --lc-z-header: 100;
+  --lc-z-drawer: 200;
+  --lc-z-toast: 300;
+}
+
+/* Respeita prefers-reduced-motion em todo o sistema */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

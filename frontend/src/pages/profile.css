@@ -1,0 +1,99 @@
+/* ---------- Perfil e segurança (fase 7) ---------- */
+.lc-profile__section {
+  max-width: 46rem;
+  margin-bottom: var(--lc-space-6);
+}
+
+.lc-profile__section h2 {
+  font-size: var(--lc-text-h3);
+  margin-bottom: var(--lc-space-3);
+}
+
+.lc-profile__section h3 {
+  font-size: var(--lc-text-body);
+  margin: 0;
+}
+
+.lc-profile__note {
+  color: var(--lc-ink-soft);
+  font-size: var(--lc-text-sm);
+  margin: 0 0 var(--lc-space-4);
+}
+
+.lc-profile__success {
+  background: var(--lc-success-100);
+  color: var(--lc-success-700);
+  border-radius: var(--lc-radius-md);
+  padding: var(--lc-space-3) var(--lc-space-4);
+  font-size: var(--lc-text-sm);
+  margin: 0 0 var(--lc-space-4);
+}
+
+.lc-profile__addresses {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lc-space-3);
+}
+
+.lc-profile__address {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--lc-space-4);
+  flex-wrap: wrap;
+  border: 1px solid var(--lc-border);
+  border-radius: var(--lc-radius-md);
+  padding: var(--lc-space-4);
+}
+
+.lc-profile__address-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--lc-text-sm);
+}
+
+.lc-profile__address-main strong {
+  display: flex;
+  align-items: center;
+  gap: var(--lc-space-2);
+  font-size: var(--lc-text-body);
+}
+
+.lc-profile__address-main span {
+  color: var(--lc-ink-soft);
+}
+
+.lc-profile__address-actions {
+  display: flex;
+  gap: var(--lc-space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.lc-profile__confirm {
+  display: flex;
+  gap: var(--lc-space-2);
+  align-items: center;
+}
+
+.lc-profile__address-form {
+  margin-top: var(--lc-space-5);
+  padding-top: var(--lc-space-5);
+  border-top: 1px dashed var(--lc-border);
+}
+
+.lc-profile__address-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: var(--lc-space-4);
+}
+
+.lc-profile__checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--lc-space-2);
+  font-size: var(--lc-text-sm);
+}

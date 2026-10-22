@@ -1,0 +1,41 @@
+.lc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lc-space-1);
+  padding: 0.15rem var(--lc-space-3);
+  border-radius: var(--lc-radius-pill);
+  font-size: var(--lc-text-xs);
+  font-weight: var(--lc-weight-semibold);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.lc-badge__mark {
+  font-size: 0.7em;
+  line-height: 1;
+}
+
+.lc-badge--neutral {
+  background: var(--lc-surface-muted);
+  color: var(--lc-ink-soft);
+}
+.lc-badge--blue {
+  background: var(--lc-blue-100);
+  color: var(--lc-blue-800);
+}
+.lc-badge--gold {
+  background: var(--lc-gold-100);
+  color: var(--lc-gold-700);
+}
+.lc-badge--success {
+  background: var(--lc-success-100);
+  color: var(--lc-success-700);
+}
+.lc-badge--warning {
+  background: var(--lc-warning-100);
+  color: var(--lc-warning-700);
+}
+.lc-badge--danger {
+  background: var(--lc-danger-100);
+  color: var(--lc-danger-700);
+}

@@ -1,0 +1,46 @@
+/* Página genérica e placeholder de fases por entregar */
+.lc-page {
+  padding-block: var(--lc-space-12);
+  min-height: 60vh;
+}
+
+.lc-center {
+  text-align: center;
+}
+
+.placeholder__head {
+  max-width: 44rem;
+}
+
+.placeholder__head h1 {
+  margin-top: var(--lc-space-4);
+  font-size: var(--lc-text-h1);
+}
+
+.placeholder__lead {
+  margin-top: var(--lc-space-4);
+  font-size: var(--lc-text-body-lg);
+  color: var(--lc-ink-soft);
+}
+
+.placeholder__details {
+  margin-top: var(--lc-space-6);
+  padding: var(--lc-space-5);
+  background: var(--lc-surface-soft);
+  border-left: 3px solid var(--lc-gold-500);
+  border-radius: var(--lc-radius-md);
+  max-width: 44rem;
+}
+
+.placeholder__details ul {
+  margin: var(--lc-space-2) 0 0;
+  padding-left: var(--lc-space-5);
+  color: var(--lc-ink-soft);
+  display: grid;
+  gap: var(--lc-space-1);
+}
+
+.placeholder__back {
+  margin-top: var(--lc-space-10);
+  font-weight: var(--lc-weight-medium);
+}

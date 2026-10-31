@@ -12,6 +12,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Spinner } from '../../components/ui/Spinner';
+import { OrderOpsPanels } from './OrderOpsPanels';
 import './admin.css';
 
 /** Rótulos accionáveis por estado de destino (a máquina decide o que aparece). */
@@ -268,6 +269,13 @@ export function AdminOrderDetailPage() {
           )}
         </div>
       </section>
+
+      <OrderOpsPanels
+        orderNumber={order.number}
+        paymentStatus={order.paymentStatus}
+        total={order.total}
+        onChanged={() => setReloadKey((key) => key + 1)}
+      />
     </>
   );
 }

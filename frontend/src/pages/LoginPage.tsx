@@ -100,6 +100,9 @@ export function LoginPage() {
         </form>
 
         <p className="lc-auth__alt">
+          <Link to="/recuperar-palavra-passe">Esqueceu a palavra-passe?</Link>
+        </p>
+        <p className="lc-auth__alt">
           Ainda não tem conta? <Link to="/registar">Criar conta</Link>
         </p>
       </Card>

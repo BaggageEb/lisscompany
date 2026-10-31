@@ -105,6 +105,12 @@
       <version>2.1.0</version>
       <scope>test</scope>
     </dependency>
+        <!-- Cloudinary: armazenamento de imagens na nuvem -->
+    <dependency>
+      <groupId>com.cloudinary</groupId>
+      <artifactId>cloudinary-http5</artifactId>
+      <version>2.5.0</version>
+    </dependency>
   </dependencies>
 
   <build>

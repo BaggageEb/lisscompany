@@ -103,6 +103,20 @@ public class CustomerOrder {
     @Column(name = "points_spent", nullable = false)
     private int pointsSpent;
 
+    @Column(name = "delivery_zone_id")
+    private UUID deliveryZoneId;
+
+    /** Snapshot do nome da zona no momento da compra. */
+    @Column(name = "delivery_zone_name", length = 160)
+    private String deliveryZoneName;
+
+    /** Janela de levantamento escolhida pelo cliente (texto livre, sem fuso inventado). */
+    @Column(name = "pickup_slot", length = 120)
+    private String pickupSlot;
+
+    @Column(name = "terms_accepted_at")
+    private Instant termsAcceptedAt;
+
     @Column(nullable = false, length = 3)
     private String currency = "AOA";
 
@@ -293,5 +307,37 @@ public class CustomerOrder {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public UUID getDeliveryZoneId() {
+        return deliveryZoneId;
+    }
+
+    public void setDeliveryZoneId(UUID deliveryZoneId) {
+        this.deliveryZoneId = deliveryZoneId;
+    }
+
+    public String getDeliveryZoneName() {
+        return deliveryZoneName;
+    }
+
+    public void setDeliveryZoneName(String deliveryZoneName) {
+        this.deliveryZoneName = deliveryZoneName;
+    }
+
+    public String getPickupSlot() {
+        return pickupSlot;
+    }
+
+    public void setPickupSlot(String pickupSlot) {
+        this.pickupSlot = pickupSlot;
+    }
+
+    public Instant getTermsAcceptedAt() {
+        return termsAcceptedAt;
+    }
+
+    public void setTermsAcceptedAt(Instant termsAcceptedAt) {
+        this.termsAcceptedAt = termsAcceptedAt;
     }
 }

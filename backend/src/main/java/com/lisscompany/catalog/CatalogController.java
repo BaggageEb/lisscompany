@@ -29,12 +29,21 @@ public class CatalogController {
             String imageUrl,
             String categorySlug,
             String categoryName,
-            boolean available) {}
+            boolean available,
+            List<String> gallery,
+            Integer stockQty) {}
 
     private final CatalogService service;
+    private final CatalogAdminService adminService;
+    private final com.lisscompany.inventory.InventoryService inventoryService;
 
-    public CatalogController(CatalogService service) {
+    public CatalogController(
+            CatalogService service,
+            CatalogAdminService adminService,
+            com.lisscompany.inventory.InventoryService inventoryService) {
         this.service = service;
+        this.adminService = adminService;
+        this.inventoryService = inventoryService;
     }
 
     @GetMapping("/categories")
@@ -60,6 +69,7 @@ public class CatalogController {
     }
 
     private ProductView toView(Product product) {
+        Integer free = inventoryService.availableFor(product.getId());
         return new ProductView(
                 product.getId().toString(),
                 product.getSlug(),
@@ -70,6 +80,8 @@ public class CatalogController {
                 product.getImageUrl(),
                 product.getCategory().getSlug(),
                 product.getCategory().getName(),
-                product.getStatus() == ProductStatus.ACTIVE);
+                product.getStatus() == ProductStatus.ACTIVE && (free == null || free > 0),
+                adminService.galleryOf(product.getId()),
+                free == null ? null : Math.max(free, 0));
     }
 }

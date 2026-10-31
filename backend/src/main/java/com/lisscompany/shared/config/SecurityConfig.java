@@ -57,6 +57,7 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
+            @Value("${app.docs.public:false}") boolean docsPublic,
             CorsConfigurationSource corsConfigurationSource,
             CsrfTokenRepository csrfTokenRepository,
             HttpSessionSecurityContextRepository securityContextRepository) throws Exception {
@@ -65,8 +66,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Liveness do serviço — sem dados sensíveis
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
-                        // Documentação da API (só em desenvolvimento/interior; rever antes da produção)
-                        .requestMatchers("/api/v1/docs/**", "/v3/api-docs/**", "/swagger-ui/**").permitAll()
+                        // Documentação da API: pública só quando app.docs.public=true (desenvolvimento)
+                        .requestMatchers(docsPublic
+                                ? new String[] {"/api/v1/docs/**", "/v3/api-docs/**", "/swagger-ui/**"}
+                                : new String[] {"/__docs_disabled__"})
+                        .permitAll()
                         // Endpoints públicos da loja (catálogo, contactos) — crescem por fase
                         .requestMatchers("/api/v1/public/**").permitAll()
                         // Fase 4 — identidade: estas rotas são públicas mas continuam
@@ -75,7 +79,9 @@ public class SecurityConfig {
                                 "/api/v1/csrf",
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login",
-                                "/api/v1/auth/logout")
+                                "/api/v1/auth/logout",
+                                "/api/v1/auth/forgot",
+                                "/api/v1/auth/reset")
                         .permitAll()
                         // Tudo o resto exige sessão autenticada
                         .anyRequest().authenticated())
@@ -107,7 +113,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(
                 Arrays.stream(allowedOrigins.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "X-CSRF-TOKEN"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

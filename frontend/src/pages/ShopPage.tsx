@@ -18,6 +18,9 @@ export function ShopPage() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [category, setCategory] = useState<string>('all');
   const [reloadToken, setReloadToken] = useState(0);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<'default' | 'price-asc' | 'price-desc' | 'name'>('default');
+  const [pageCount, setPageCount] = useState(1);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -45,10 +48,23 @@ export function ShopPage() {
 
   const visible = useMemo(() => {
     if (state.kind !== 'ready') return [];
-    return category === 'all'
-      ? state.products
-      : state.products.filter((product) => product.categorySlug === category);
-  }, [state, category]);
+    const needle = query.trim().toLowerCase();
+    const filtered = state.products.filter(
+      (product) =>
+        (category === 'all' || product.categorySlug === category) &&
+        (!needle ||
+          product.name.toLowerCase().includes(needle) ||
+          product.description.toLowerCase().includes(needle)),
+    );
+    const sorted = [...filtered];
+    if (sort === 'price-asc') sorted.sort((a, b) => Number(a.basePrice) - Number(b.basePrice));
+    else if (sort === 'price-desc') sorted.sort((a, b) => Number(b.basePrice) - Number(a.basePrice));
+    else if (sort === 'name') sorted.sort((a, b) => a.name.localeCompare(b.name, 'pt'));
+    return sorted;
+  }, [state, category, query, sort]);
+
+  const PAGE_SIZE = 12;
+  const shown = visible.slice(0, pageCount * PAGE_SIZE);
 
   return (
     <div className="lc-container lc-page shop">
@@ -104,6 +120,37 @@ export function ShopPage() {
             </div>
           )}
 
+          <div className="shop__filters" role="search">
+            <label className="lc-visually-hidden" htmlFor="shop-search">
+              Pesquisar produtos
+            </label>
+            <input
+              id="shop-search"
+              type="search"
+              placeholder="Pesquisar bolos e produtos…"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPageCount(1);
+              }}
+              style={{ padding: '0.5rem 0.9rem', borderRadius: 999, border: '1px solid var(--lc-border-strong)', minWidth: '15rem' }}
+            />
+            <label className="lc-visually-hidden" htmlFor="shop-sort">
+              Ordenar por
+            </label>
+            <select
+              id="shop-sort"
+              value={sort}
+              onChange={(event) => setSort(event.target.value as typeof sort)}
+              style={{ padding: '0.5rem 0.9rem', borderRadius: 999, border: '1px solid var(--lc-border-strong)' }}
+            >
+              <option value="default">Ordem da loja</option>
+              <option value="price-asc">Preço: do mais baixo</option>
+              <option value="price-desc">Preço: do mais alto</option>
+              <option value="name">Nome (A–Z)</option>
+            </select>
+          </div>
+
           {visible.length === 0 ? (
             <div className="shop__state" role="status">
               <p>Nenhum produto disponível nesta categoria de momento.</p>
@@ -115,14 +162,16 @@ export function ShopPage() {
             </div>
           ) : (
             <ul className="shop__grid">
-              {visible.map((product) => (
+              {shown.map((product) => (
                 <li key={product.id}>
                   <Card as="article" elevation="interactive" className="shop__card">
-                    <div className="shop__thumb" aria-hidden="true">
+                    <div className="shop__thumb">
                       {product.imageUrl ? (
-                        <img src={product.imageUrl} alt="" loading="lazy" />
+                        <img src={product.imageUrl} alt={`Fotografia de ${product.name}`} loading="lazy" />
                       ) : (
-                        <span className="shop__thumb-letter">{product.name.charAt(0)}</span>
+                        <span className="shop__thumb-letter" aria-hidden="true">
+                          {product.name.charAt(0)}
+                        </span>
                       )}
                     </div>
                     <div className="shop__body">
@@ -148,6 +197,14 @@ export function ShopPage() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {shown.length < visible.length && (
+            <p className="shop__state">
+              <Button variant="secondary" onClick={() => setPageCount((n) => n + 1)}>
+                Mostrar mais ({visible.length - shown.length})
+              </Button>
+            </p>
           )}
         </>
       )}

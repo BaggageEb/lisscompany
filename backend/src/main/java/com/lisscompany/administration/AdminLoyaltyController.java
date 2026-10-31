@@ -23,6 +23,7 @@ import com.lisscompany.promotions.DiscountService;
 import com.lisscompany.shared.error.NotFoundException;
 import com.lisscompany.shared.error.UnauthorizedException;
 import com.lisscompany.shared.security.OwnerGuard;
+import com.lisscompany.shared.security.Permissions;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -65,21 +66,21 @@ public class AdminLoyaltyController {
     /** Configuração em vigor: regra de fidelização + recompensas. */
     @GetMapping("/config")
     public LoyaltyService.ConfigView config() {
-        ownerGuard.requireOwner(principal().id());
+        ownerGuard.require(principal().id(), Permissions.LOYALTY_MANAGE);
         return loyaltyService.config();
     }
 
     /** Regra de descontos (boas-vindas/recompensas) com prioridades (#11). */
     @GetMapping("/config/discounts")
     public List<DiscountService.RuleView> discounts() {
-        ownerGuard.requireOwner(principal().id());
+        ownerGuard.require(principal().id(), Permissions.LOYALTY_MANAGE);
         return discountService.list();
     }
 
     /** Cria/actualiza a regra de fidelização (linha única — todos os campos). */
     @PutMapping("/config/rule")
     public LoyaltyService.RuleView configureRule(@Valid @RequestBody LoyaltyService.RuleInput input) {
-        AppUser actor = ownerGuard.requireOwner(principal().id());
+        AppUser actor = ownerGuard.require(principal().id(), Permissions.LOYALTY_MANAGE);
         return loyaltyService.configureRule(input, actor);
     }
 
@@ -87,7 +88,7 @@ public class AdminLoyaltyController {
     @PostMapping("/config/rewards")
     @ResponseStatus(HttpStatus.OK)
     public LoyaltyService.RewardView upsertReward(@Valid @RequestBody LoyaltyService.RewardInput input) {
-        AppUser actor = ownerGuard.requireOwner(principal().id());
+        AppUser actor = ownerGuard.require(principal().id(), Permissions.LOYALTY_MANAGE);
         return loyaltyService.upsertReward(input, actor);
     }
 
@@ -95,14 +96,14 @@ public class AdminLoyaltyController {
     @PostMapping("/config/discounts")
     @ResponseStatus(HttpStatus.OK)
     public DiscountService.RuleView upsertDiscount(@Valid @RequestBody DiscountService.RuleInput input) {
-        AppUser actor = ownerGuard.requireOwner(principal().id());
+        AppUser actor = ownerGuard.require(principal().id(), Permissions.LOYALTY_MANAGE);
         return discountService.configure(input, actor);
     }
 
     /** Contas de fidelização e saldos — leitura do painel. */
     @GetMapping("/accounts")
     public List<LoyaltyService.AccountView> accounts() {
-        ownerGuard.requireOwner(principal().id());
+        ownerGuard.require(principal().id(), Permissions.LOYALTY_MANAGE);
         return loyaltyService.accounts();
     }
 
@@ -114,7 +115,7 @@ public class AdminLoyaltyController {
     @ResponseStatus(HttpStatus.OK)
     public LoyaltyService.TransactionView adjust(
             @PathVariable UUID userId, @RequestBody AdjustmentRequest request) {
-        AppUser actor = ownerGuard.requireOwner(principal().id());
+        AppUser actor = ownerGuard.require(principal().id(), Permissions.LOYALTY_MANAGE);
         // O alvo é uma conta REAL — nunca um identificador inventado.
         userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("USER_NOT_FOUND", "Conta não encontrada."));

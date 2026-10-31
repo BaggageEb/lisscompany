@@ -51,6 +51,7 @@ export function AdminLoyaltyPage() {
   const [rewardDescription, setRewardDescription] = useState('');
   const [rewardMinPoints, setRewardMinPoints] = useState('');
   const [rewardMinOrders, setRewardMinOrders] = useState('');
+  const [rewardGoalKz, setRewardGoalKz] = useState('');
   const [rewardAmount, setRewardAmount] = useState('');
   const [rewardMax, setRewardMax] = useState('1');
   const [rewardActive, setRewardActive] = useState(true);
@@ -143,6 +144,7 @@ export function AdminLoyaltyPage() {
     setRewardDescription(reward.description);
     setRewardMinPoints(reward.minPoints === null ? '' : String(reward.minPoints));
     setRewardMinOrders(reward.minOrders === null ? '' : String(reward.minOrders));
+    setRewardGoalKz(reward.goalKz ?? '');
     setRewardAmount(reward.discountAmount);
     setRewardMax(String(reward.maxPerCustomer));
     setRewardActive(reward.active);
@@ -159,6 +161,7 @@ export function AdminLoyaltyPage() {
         description: rewardDescription.trim(),
         minPoints: rewardMinPoints.trim() ? Number.parseInt(rewardMinPoints, 10) : undefined,
         minOrders: rewardMinOrders.trim() ? Number.parseInt(rewardMinOrders, 10) : undefined,
+        goalKz: rewardGoalKz.trim() || undefined,
         discountAmount: rewardAmount.trim(),
         maxPerCustomer: Number.parseInt(rewardMax, 10) || 1,
         active: rewardActive,
@@ -349,7 +352,7 @@ export function AdminLoyaltyPage() {
                     <span className="lc-admin__row-title">{reward.description}</span>
                     <span className="lc-admin__row-meta">
                       {reward.code} ·{' '}
-                      {reward.minPoints !== null && `${reward.minPoints} pontos`}
+                      {reward.goalKz ? `meta ${reward.goalKz} Kz` : reward.minPoints !== null && `${reward.minPoints} pontos`}
                       {reward.minPoints !== null && reward.minOrders !== null && ' e '}
                       {reward.minOrders !== null && `${reward.minOrders} encomendas`} ·{' '}
                       {reward.discountAmount} Kz de desconto · máx. {reward.maxPerCustomer} por cliente
@@ -407,6 +410,24 @@ export function AdminLoyaltyPage() {
               />
             </div>
             <div className="lc-admin__field">
+              <label htmlFor="reward-goal">Meta em Kz (opcional, utilização única)</label>
+              <input
+                id="reward-goal"
+                type="number"
+                step="0.01"
+                min="0"
+                value={rewardGoalKz}
+                onChange={(event) => {
+                  setRewardGoalKz(event.target.value);
+                  if (event.target.value) setRewardMax('1');
+                }}
+                placeholder="Ex.: 10000"
+              />
+              <p className="lc-admin__section-note">
+                Define os pontos exigidos pela conversão em vigor. Use 10000 para a meta de 10.000 Kz.
+              </p>
+            </div>
+            <div className="lc-admin__field">
               <label htmlFor="reward-min-points">Mínimo de pontos (condição)</label>
               <input
                 id="reward-min-points"
@@ -419,7 +440,7 @@ export function AdminLoyaltyPage() {
               />
             </div>
             <div className="lc-admin__field">
-              <label htmlFor="reward-min-orders">Mínimo de encomendas (condição)</label>
+              <label htmlFor="reward-min-orders">Mínimo de encomendas concluídas e pagas (condição)</label>
               <input
                 id="reward-min-orders"
                 type="number"

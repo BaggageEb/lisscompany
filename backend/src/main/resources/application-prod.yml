@@ -1,0 +1,14 @@
+# Perfil de produção: defaults seguros.
+app:
+  docs:
+    public: false
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

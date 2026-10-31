@@ -74,6 +74,7 @@ class CakeStudioServiceTest {
         when(ingredient.getName()).thenReturn(name);
         when(ingredient.getPriceDelta()).thenReturn(new BigDecimal(delta));
         when(ingredient.isActive()).thenReturn(true);
+        when(ingredient.isAvailable()).thenReturn(true);
         return ingredient;
     }
 

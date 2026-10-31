@@ -42,6 +42,10 @@ public class RewardRule {
     @Column(name = "min_points")
     private Integer minPoints;
 
+    /** Meta em Kz (ex.: 10 000): os pontos exigidos derivam da conversão em vigor. */
+    @Column(name = "goal_kz", precision = 12, scale = 2)
+    private BigDecimal goalKz;
+
     /** Encomendas pagas mínimas, cumulativamente (decisão #13). */
     @Column(name = "min_orders")
     private Integer minOrders;
@@ -140,5 +144,13 @@ public class RewardRule {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public BigDecimal getGoalKz() {
+        return goalKz;
+    }
+
+    public void setGoalKz(BigDecimal goalKz) {
+        this.goalKz = goalKz;
     }
 }

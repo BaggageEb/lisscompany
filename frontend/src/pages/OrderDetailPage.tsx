@@ -7,6 +7,7 @@ import { useSession } from '../lib/session';
 import { Badge } from '../components/ui/Badge';
 import { Button, ButtonLink } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { PaymentInstructionsCard } from '../components/payment/PaymentInstructionsCard';
 import { Spinner } from '../components/ui/Spinner';
 import './account.css';
 
@@ -256,6 +257,18 @@ export function OrderDetailPage() {
               </dd>
             </div>
           )}
+          {order.deliveryZone && (
+            <div>
+              <dt>Zona de entrega</dt>
+              <dd>{order.deliveryZone}</dd>
+            </div>
+          )}
+          {order.pickupSlot && (
+            <div>
+              <dt>Levantamento pretendido</dt>
+              <dd>{order.pickupSlot}</dd>
+            </div>
+          )}
           {order.notes && (
             <div>
               <dt>Notas</dt>
@@ -264,6 +277,10 @@ export function OrderDetailPage() {
           )}
         </dl>
       </Card>
+
+      {order.status !== 'CANCELLED' && (
+        <PaymentInstructionsCard orderNumber={order.number} method={order.paymentMethod} paymentStatus={order.paymentStatus} />
+      )}
 
       <section className="lc-orders__actions" aria-label="Acções da encomenda">
         {canCancel && !confirmingCancel && (

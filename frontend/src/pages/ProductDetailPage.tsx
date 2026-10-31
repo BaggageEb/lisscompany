@@ -24,6 +24,7 @@ export function ProductDetailPage() {
   const [reloadToken, setReloadToken] = useState(0);
   const [added, setAdded] = useState(false);
   const [cartCount, setCartCount] = useState(() => cartQuantity());
+  const [activeImage, setActiveImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -94,11 +95,32 @@ export function ProductDetailPage() {
       </p>
 
       <div className="shop__detail">
-        <div className="shop__thumb shop__detail-thumb" aria-hidden="true">
-          {product.imageUrl ? (
-            <img src={product.imageUrl} alt="" loading="lazy" />
-          ) : (
-            <span className="shop__thumb-letter">{product.name.charAt(0)}</span>
+        <div>
+          <div className="shop__thumb shop__detail-thumb">
+            {(activeImage ?? product.imageUrl) ? (
+              <img src={(activeImage ?? product.imageUrl) as string} alt={`Fotografia de ${product.name}`} />
+            ) : (
+              <span className="shop__thumb-letter" aria-hidden="true">
+                {product.name.charAt(0)}
+              </span>
+            )}
+          </div>
+          {product.gallery && product.gallery.length > 0 && (
+            <ul className="shop__gallery" aria-label="Mais fotografias" style={{ display: 'flex', gap: '0.5rem', listStyle: 'none', padding: 0, marginTop: '0.75rem', flexWrap: 'wrap' }}>
+              {[product.imageUrl, ...product.gallery].filter((url): url is string => Boolean(url)).filter((url, i, all) => all.indexOf(url) === i).map((url, index) => (
+                <li key={url}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveImage(url)}
+                    aria-label={`Ver foto ${index + 1} de ${product.name}`}
+                    aria-pressed={(activeImage ?? product.imageUrl) === url}
+                    style={{ padding: 0, border: '2px solid var(--lc-border)', borderRadius: 8, background: 'none', cursor: 'pointer' }}
+                  >
+                    <img src={url} alt="" width={72} height={72} style={{ objectFit: 'cover', display: 'block', borderRadius: 6 }} loading="lazy" />
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
@@ -113,6 +135,9 @@ export function ProductDetailPage() {
               <Badge tone="success">Disponível</Badge>
             ) : (
               <Badge tone="warning">Esgotado</Badge>
+            )}
+            {product.available && product.stockQty != null && product.stockQty <= 5 && (
+              <Badge tone="gold">Restam {product.stockQty}</Badge>
             )}
           </div>
 

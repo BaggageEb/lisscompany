@@ -13,24 +13,56 @@ spring:
       hibernate.jdbc.time_zone: UTC
   flyway:
     enabled: true
+    # O seed de DEMONSTRAÇÃO (db/demo) só entra com o perfil «demo».
     locations: classpath:db/migration
+    ignore-migration-patterns: "*:missing"
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 7MB
   lifecycle:
     timeout-per-shutdown-phase: 20s
 
 server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+        # Em produção (HTTPS) defina COOKIE_SECURE=true.
+        secure: ${COOKIE_SECURE:false}
   error:
     include-stacktrace: never
     include-message: never
 
 app:
+  # Documentação OpenAPI pública: true só em desenvolvimento (DOCS_PUBLIC=false em produção).
+  docs:
+    public: ${DOCS_PUBLIC:true}
+
+  cloudinary:
+    enabled: ${CLOUDINARY_ENABLED:false}
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+  media:
+    # Pasta das imagens carregadas no painel (montar volume persistente em produção).
+    dir: ${MEDIA_DIR:./data/media}
+  auth:
+    # Validade do token de recuperação de palavra-passe.
+    reset-token-minutes: 60
+    # APENAS desenvolvimento: regista o link de recuperação no log.
+    dev-log-reset-links: ${DEV_LOG_RESET_LINKS:false}
+  public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}
   cors:
     # Origens permitidas para o frontend (separadas por vírgula)
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
 springdoc:
   api-docs:
+    enabled: ${DOCS_PUBLIC:true}
     path: /api/v1/docs
   swagger-ui:
     path: /api/v1/docs/ui

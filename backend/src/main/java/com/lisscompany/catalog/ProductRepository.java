@@ -13,4 +13,12 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     Optional<Product> findBySlugAndStatus(String slug, ProductStatus status);
 
     Optional<Product> findFirstByCakeStudioBaseTrueAndStatus(ProductStatus status);
+
+    List<Product> findAllByOrderByCategoryDisplayOrderAscNameAsc();
+
+    boolean existsBySlug(String slug);
+
+    boolean existsByCategoryId(UUID categoryId);
+
+    List<Product> findByCakeStudioBaseTrue();
 }

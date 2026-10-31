@@ -6,4 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProductCategoryRepository extends JpaRepository<ProductCategory, java.util.UUID> {
     List<ProductCategory> findAllByOrderByDisplayOrderAscNameAsc();
+
+    boolean existsBySlug(String slug);
 }

@@ -28,6 +28,8 @@ import com.lisscompany.shared.error.CartValidationException;
 import com.lisscompany.shared.error.ConflictException;
 import com.lisscompany.shared.error.InvalidRequestException;
 import com.lisscompany.shared.error.NotFoundException;
+import com.lisscompany.delivery.DeliveryService;
+import com.lisscompany.settings.SettingsService;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -56,6 +58,8 @@ public class OrderService {
     private final PaymentService paymentService;
     private final LoyaltyService loyaltyService;
     private final ObjectMapper objectMapper;
+    private final DeliveryService deliveryService;
+    private final SettingsService settingsService;
 
     public OrderService(
             AuditService auditService,
@@ -66,7 +70,11 @@ public class OrderService {
             InventoryService inventoryService,
             PaymentService paymentService,
             LoyaltyService loyaltyService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            DeliveryService deliveryService,
+            SettingsService settingsService) {
+        this.deliveryService = deliveryService;
+        this.settingsService = settingsService;
         this.auditService = auditService;
         this.cartQuoteService = cartQuoteService;
         this.orderRepository = orderRepository;
@@ -105,7 +113,13 @@ public class OrderService {
             /** Pontos que o cliente quer resgatar (0/ausente = nenhum, fase 6). */
             Integer pointsToSpend,
             /** Código público da recompensa escolhida (ausente = nenhuma, fase 6). */
-            String rewardCode) {}
+            String rewardCode,
+            /** Zona de entrega (obrigatória quando a loja tem zonas activas). */
+            String deliveryZoneId,
+            /** Janela de levantamento (opcional). */
+            String pickupSlot,
+            /** Aceitação das condições (obrigatória quando a loja publicou termos). */
+            Boolean termsAccepted) {}
 
     public record ItemView(
             String kind, String name, String unitPrice, int quantity, String lineTotal, List<String> summary) {}
@@ -131,7 +145,9 @@ public class OrderService {
             int pointsSpent,
             String total,
             String currency,
-            List<ItemView> items) {}
+            List<ItemView> items,
+            String deliveryZone,
+            String pickupSlot) {}
 
     public record OrderSummaryView(
             String number, String status, String paymentStatus, String createdAt, String total, String currency, int itemCount) {}
@@ -163,8 +179,17 @@ public class OrderService {
         order.setContactPhone(input.contactPhone().trim());
         order.setNotes(blankToNull(input.notes()));
         order.setPaymentMethod(input.paymentMethod());
-        // Fase 4: sem tarifas (decisão #3 pendente) — entrega sempre a zero.
         order.setDeliveryFee(BigDecimal.ZERO);
+        if (settingsService.termsRequired() && !Boolean.TRUE.equals(input.termsAccepted())) {
+            throw new InvalidRequestException(Map.of(
+                    "termsAccepted", "Tem de aceitar os termos e condições para encomendar."));
+        }
+        if (Boolean.TRUE.equals(input.termsAccepted())) {
+            order.setTermsAcceptedAt(java.time.Instant.now());
+        }
+        if (input.fulfillment() == OrderFulfillment.PICKUP) {
+            order.setPickupSlot(blankToNull(input.pickupSlot()));
+        }
         if (input.fulfillment() == OrderFulfillment.DELIVERY) {
             order.setAddressLine1(blankToNull(input.addressLine1()));
             order.setAddressLine2(blankToNull(input.addressLine2()));
@@ -187,6 +212,16 @@ public class OrderService {
 
         BigDecimal total = new BigDecimal(quote.total());
         order.setSubtotal(total);
+
+        // 3a. Entrega: a tarifa vem SEMPRE da zona configurada no servidor.
+        if (input.fulfillment() == OrderFulfillment.DELIVERY) {
+            DeliveryService.Zone zone = deliveryService.resolveForOrder(input.deliveryZoneId());
+            if (zone != null) {
+                order.setDeliveryZoneId(UUID.fromString(zone.id()));
+                order.setDeliveryZoneName(zone.name());
+                order.setDeliveryFee(deliveryService.feeFor(zone, total));
+            }
+        }
 
         // 3b. Fidelização (fase 6): o cliente pode pedir pontos ou uma
         //     recompensa; o SERVIDOR avalia elegibilidade, limites e valor.
@@ -362,6 +397,10 @@ public class OrderService {
         OrderStatus from = order.getStatus();
         order.setStatus(target);
         orderRepository.save(order);
+        if (target == OrderStatus.COMPLETED) {
+            // Pontos: só encomenda concluída E paga (idempotente por encomenda).
+            loyaltyService.creditFor(order, actor.id(), actor.email());
+        }
         auditService.record(
                 actor.id(),
                 actor.email(),
@@ -572,7 +611,9 @@ public class OrderService {
                 order.getPointsSpent(),
                 money(order.getTotal()),
                 order.getCurrency(),
-                order.getItems().stream().map(this::itemView).toList());
+                order.getItems().stream().map(this::itemView).toList(),
+                order.getDeliveryZoneName(),
+                order.getPickupSlot());
     }
 
     private OrderSummaryView summary(CustomerOrder order, com.lisscompany.payments.PaymentStatus payment) {

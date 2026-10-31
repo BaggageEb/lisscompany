@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { logout, useSession } from '../../lib/session';
+import { hasAdminAccess } from '../../lib/permissions';
 import './header.css';
 
 const NAV_LINKS = [
@@ -49,7 +50,7 @@ export function Header() {
         <div className="lc-header__actions">
           {session.kind === 'authenticated' ? (
             <>
-              {session.user.owner && (
+              {hasAdminAccess(session.user) && (
                 <Link to="/admin" className="lc-header__action">
                   Painel
                 </Link>

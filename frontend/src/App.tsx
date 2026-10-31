@@ -22,6 +22,14 @@ import { AdminOrderDetailPage } from './pages/admin/AdminOrderDetailPage';
 import { AdminPaymentsPage } from './pages/admin/AdminPaymentsPage';
 import { AdminInventoryPage } from './pages/admin/AdminInventoryPage';
 import { AdminLoyaltyPage } from './pages/admin/AdminLoyaltyPage';
+import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
+import { AdminProductsPage } from './pages/admin/AdminProductsPage';
+import { AdminIngredientsPage } from './pages/admin/AdminIngredientsPage';
+import { AdminCustomersPage } from './pages/admin/AdminCustomersPage';
+import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
+import { AdminStaffPage } from './pages/admin/AdminStaffPage';
+import { AdminAuditPage } from './pages/admin/AdminAuditPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { ContactPage } from './pages/ContactPage';
 import { InfoPage } from './pages/InfoPage';
 import { refreshSession } from './lib/session';
@@ -72,17 +80,24 @@ export function App() {
           <Route path="/entrar" element={<LoginPage />} />
           <Route path="/registar" element={<RegisterPage />} />
           <Route path="/recuperar-palavra-passe" element={<ForgotPasswordPage />} />
+          <Route path="/redefinir-palavra-passe" element={<ResetPasswordPage />} />
           <Route path="/conta" element={<AccountPage />} />
           <Route path="/conta/encomendas" element={<OrdersPage />} />
           <Route path="/conta/encomendas/:number" element={<OrderDetailPage />} />
           <Route path="/conta/perfil" element={<ProfilePage />} />
           <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<AdminOrdersPage />} />
+            <Route index element={<AdminDashboardPage />} />
             <Route path="encomendas" element={<AdminOrdersPage />} />
             <Route path="encomendas/:number" element={<AdminOrderDetailPage />} />
             <Route path="pagamentos" element={<AdminPaymentsPage />} />
             <Route path="inventario" element={<AdminInventoryPage />} />
             <Route path="fidelizacao" element={<AdminLoyaltyPage />} />
+            <Route path="produtos" element={<AdminProductsPage />} />
+            <Route path="ingredientes" element={<AdminIngredientsPage />} />
+            <Route path="clientes" element={<AdminCustomersPage />} />
+            <Route path="definicoes" element={<AdminSettingsPage />} />
+            <Route path="equipa" element={<AdminStaffPage />} />
+            <Route path="auditoria" element={<AdminAuditPage />} />
           </Route>
           <Route path="/fidelizacao" element={<LoyaltyPage />} />
           <Route path="/contactos" element={<ContactPage />} />

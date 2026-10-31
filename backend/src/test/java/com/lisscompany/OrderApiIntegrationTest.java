@@ -47,6 +47,7 @@ class OrderApiIntegrationTest {
         registry.add("spring.datasource.url", () -> postgres.getJdbcUrl("postgres", "postgres"));
         registry.add("spring.datasource.username", () -> "postgres");
         registry.add("spring.datasource.password", () -> "postgres");
+        registry.add("spring.flyway.locations", () -> "classpath:db/migration,classpath:db/demo");
     }
 
     @AfterAll

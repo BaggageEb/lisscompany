@@ -76,6 +76,7 @@ class LoyaltyPromotionsIntegrationTest {
         registry.add("spring.datasource.url", () -> postgres.getJdbcUrl("postgres", "postgres"));
         registry.add("spring.datasource.username", () -> "postgres");
         registry.add("spring.datasource.password", () -> "postgres");
+        registry.add("spring.flyway.locations", () -> "classpath:db/migration,classpath:db/demo");
     }
 
     @AfterAll
@@ -175,6 +176,7 @@ class LoyaltyPromotionsIntegrationTest {
         String productId = unlimited("bolo-no-pote-premium");
         String number = createOrder(client, productId, 1, Map.of());
         pay(owner, number, "t2-key");
+        complete(owner, number);
 
         // 10% de 3500 Kz = 350 pontos (HALF_UP), com a taxa arquivada.
         mockMvc.perform(get("/api/v1/loyalty").session(client))
@@ -225,6 +227,7 @@ class LoyaltyPromotionsIntegrationTest {
         String productId = unlimited("bolo-no-pote-premium");
         String number = createOrder(client, productId, 1, Map.of());
         pay(owner, number, "t3-key");
+        complete(owner, number);
 
         mockMvc.perform(get("/api/v1/loyalty").session(client))
                 .andExpect(status().isOk())
@@ -291,6 +294,7 @@ class LoyaltyPromotionsIntegrationTest {
 
         // Pago: acumula sobre o valor APÓS desconto (2500 → 250 pontos).
         pay(owner, number, "t4-key");
+        complete(owner, number);
         mockMvc.perform(get("/api/v1/loyalty").session(client))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.pointsBalance").value(4250));
@@ -334,7 +338,7 @@ class LoyaltyPromotionsIntegrationTest {
         expectRejectedPoints(client, productId, 4000, "excedem o desconto");
 
         // (e) Pontos E recompensa no mesmo pedido → um desconto por encomenda (#11).
-        Map<String, Object> reward = rewardBody("GOAL_TESTE5", "Recompensa teste", 100, null, "1000", 1, true);
+        Map<String, Object> reward = rewardBody("GOAL_TESTE5", "Recompensa teste", 100, 1, "1000", 1, true);
         upsertReward(owner, reward);
         mockMvc.perform(post("/api/v1/orders")
                         .session(client)
@@ -420,8 +424,10 @@ class LoyaltyPromotionsIntegrationTest {
         // Duas compras pagas atingem a condição cumulativa.
         String first = createOrder(client, productId, 1, Map.of());
         pay(owner, first, "t7-key-1");
+        complete(owner, first);
         String second = createOrder(client, productId, 1, Map.of());
         pay(owner, second, "t7-key-2");
+        complete(owner, second);
 
         // 6000 + 350 + 350 = 6700 pontos, 2 encomendas não canceladas.
         mockMvc.perform(get("/api/v1/loyalty").session(client))
@@ -589,6 +595,7 @@ class LoyaltyPromotionsIntegrationTest {
         String productId = unlimited("bolo-no-pote-premium");
         String number = createOrder(alice, productId, 1, Map.of());
         pay(owner, number, "t10-key");
+        complete(owner, number);
 
         // Alice tem pontos; Bob continua a zero — e os movimentos são só dela.
         mockMvc.perform(get("/api/v1/loyalty").session(alice))
@@ -709,6 +716,17 @@ class LoyaltyPromotionsIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.type").value("ADJUSTMENT"))
                 .andExpect(jsonPath("$.points").value(points));
+    }
+
+    /** Pontos só são creditados com a encomenda CONCLUÍDA e paga. */
+    private void complete(MockHttpSession owner, String orderNumber) throws Exception {
+        for (String target : java.util.List.of("PREPARING", "READY", "COMPLETED")) {
+            mockMvc.perform(post("/api/v1/admin/orders/" + orderNumber + "/status").session(owner)
+                            .header("X-CSRF-TOKEN", csrfToken(owner))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"target\":\"" + target + "\"}"))
+                    .andExpect(status().isOk());
+        }
     }
 
     private void pay(MockHttpSession owner, String orderNumber, String key) throws Exception {

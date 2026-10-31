@@ -17,6 +17,7 @@ import com.lisscompany.payments.PaymentService;
 import com.lisscompany.payments.PaymentStatus;
 import com.lisscompany.shared.error.UnauthorizedException;
 import com.lisscompany.shared.security.OwnerGuard;
+import com.lisscompany.shared.security.Permissions;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -54,14 +55,14 @@ public class PaymentAdminController {
     @GetMapping
     public List<PaymentService.PaymentAdminView> list(
             @RequestParam(name = "status", required = false) PaymentStatus status) {
-        ownerGuard.requireOwner(principal().id());
+        ownerGuard.require(principal().id(), Permissions.PAYMENTS_REVIEW);
         return paymentService.listForPanel(status);
     }
 
     /** Pagamento de uma encomenda (visível a contas autorizadas). */
     @GetMapping("/{orderNumber}")
     public PaymentService.PaymentView get(@PathVariable String orderNumber) {
-        ownerGuard.requireOwner(principal().id());
+        ownerGuard.require(principal().id(), Permissions.PAYMENTS_REVIEW);
         return paymentService.viewForOrder(orderNumber);
     }
 
@@ -71,7 +72,7 @@ public class PaymentAdminController {
     public PaymentService.PaymentView review(
             @PathVariable String orderNumber, @Valid @RequestBody ReviewRequest request) {
         CustomerPrincipal principal = principal();
-        ownerGuard.requireOwner(principal.id());
+        ownerGuard.require(principal.id(), Permissions.PAYMENTS_REVIEW);
         return paymentService.review(new PaymentService.ReviewDecision(
                 orderNumber, request.target(), request.note(), request.idempotencyKey(),
                 principal.id(), principal.email()));

@@ -106,7 +106,7 @@ public class CakeStudioService {
                         ingredient.getDescription(),
                         ingredient.getPriceDelta().toPlainString(),
                         ingredient.getImageUrl(),
-                        ingredient.isActive(),
+                        ingredient.isAvailable(),
                         ingredient.getDisplayOrder()))
                 .toList();
     }
@@ -134,6 +134,9 @@ public class CakeStudioService {
         List<String> extraIds = input.extraIds() == null ? List.of() : input.extraIds().stream().filter(Objects::nonNull).toList();
         if (extraIds.size() > rules.maxExtras()) {
             issues.add("São permitidos no máximo " + rules.maxExtras() + " extras.");
+        }
+        if (new LinkedHashSet<>(extraIds).size() != extraIds.size()) {
+            issues.add("Cada extra só pode ser escolhido uma vez.");
         }
         for (String extraId : extraIds) {
             Ingredient extra = resolve(extraId, IngredientKind.EXTRA, "Extra", issues);
@@ -187,6 +190,10 @@ public class CakeStudioService {
         Ingredient ingredient = ingredientRepository.findByIdAndActiveTrue(id).orElse(null);
         if (ingredient == null) {
             issues.add(label + ": ingrediente indisponível.");
+            return null;
+        }
+        if (!ingredient.isAvailable()) {
+            issues.add(label + ": «" + ingredient.getName() + "» está esgotado.");
             return null;
         }
         if (ingredient.getKind() != expectedKind) {

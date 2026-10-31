@@ -5,6 +5,8 @@ import {
   ApiError,
   createOrder,
   fetchLoyalty,
+  fetchStoreInfo,
+  type StoreInfo,
   postCartQuote,
   type CartQuote,
   type Fulfillment,
@@ -19,6 +21,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button, ButtonLink } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
+import { PaymentInstructionsCard } from '../components/payment/PaymentInstructionsCard';
 import './checkout.css';
 import './loyalty.css';
 
@@ -91,12 +94,29 @@ export function CheckoutPage() {
   const [error, setError] = useState<SubmitError | null>(null);
   const [created, setCreated] = useState<OrderView | null>(null);
 
+  // Configuração da loja (entrega, levantamento, métodos, termos). Falhar aqui
+  // nunca bloqueia o checkout: sem informação, mantém o comportamento base.
+  const [store, setStore] = useState<StoreInfo | null>(null);
+  const [zoneId, setZoneId] = useState('');
+  const [pickupSlot, setPickupSlot] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+
   // Fidelização (fase 6): o resumo vem do servidor, com estados honestos.
   // Uma falha aqui nunca bloqueia o checkout — a página própria explica erros.
   const [loyalty, setLoyalty] = useState<LoyaltySummary | null>(null);
   const [usePoints, setUsePoints] = useState(false);
   const [pointsInput, setPointsInput] = useState('');
   const [selectedRewardCode, setSelectedRewardCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchStoreInfo(controller.signal)
+      .then(setStore)
+      .catch(() => {
+        // Sem configuração disponível: checkout base.
+      });
+    return () => controller.abort();
+  }, []);
 
   // Pré-preenche contacto do perfil assim que a sessão é conhecida.
   useEffect(() => {
@@ -209,6 +229,9 @@ export function CheckoutPage() {
               addressMunicipality: addressMunicipality.trim() || undefined,
             }
           : {}),
+        ...(fulfillment === 'DELIVERY' && zoneId ? { deliveryZoneId: zoneId } : {}),
+        ...(fulfillment === 'PICKUP' && pickupSlot.trim() ? { pickupSlot: pickupSlot.trim() } : {}),
+        ...(termsAccepted ? { termsAccepted: true } : {}),
         paymentMethod,
         notes: notes.trim() || undefined,
         productLines: request.productLines,
@@ -225,7 +248,21 @@ export function CheckoutPage() {
     }
   }
 
-  const canSubmit = quote?.valid === true && paymentMethod !== null && !submitting;
+  const zones = store?.deliveryZones ?? [];
+  const selectedZone = zones.find((zone) => zone.id === zoneId) ?? null;
+  const termsRequired = store?.settings.termsRequired === true;
+  const zoneMissing = fulfillment === 'DELIVERY' && zones.length > 0 && !selectedZone;
+  const canSubmit =
+    quote?.valid === true &&
+    paymentMethod !== null &&
+    !submitting &&
+    !zoneMissing &&
+    (!termsRequired || termsAccepted);
+  const estimatedFee = (() => {
+    if (fulfillment !== 'DELIVERY' || !selectedZone) return null;
+    const freeOver = selectedZone.freeOver ? Number.parseFloat(selectedZone.freeOver) : null;
+    return freeOver !== null && Number.parseFloat(cartTotal(cart)) >= freeOver ? 0 : Number.parseFloat(selectedZone.fee);
+  })();
   const localTotal = cartTotal(cart);
   // `cartTotal` devolve string decimal (convenção monetária) — para a
   // estimativa de desconto converte-se uma única vez para número.
@@ -347,7 +384,11 @@ export function CheckoutPage() {
           <section className="lc-checkout__section" aria-labelledby="checkout-modalidade">
             <h2 id="checkout-modalidade">Modalidade</h2>
             <div className="lc-checkout__choices">
-              {(Object.keys(FULFILLMENT_LABELS) as Fulfillment[]).map((option) => (
+              {(Object.keys(FULFILLMENT_LABELS) as Fulfillment[])
+                .filter((option) =>
+                  option === 'PICKUP' ? store?.settings.pickupEnabled !== false : store?.settings.deliveryEnabled !== false,
+                )
+                .map((option) => (
                 <label key={option} className="lc-checkout__choice">
                   <input
                     type="radio"
@@ -360,13 +401,64 @@ export function CheckoutPage() {
                     <span className="lc-checkout__choice-name">{FULFILLMENT_LABELS[option]}</span>
                     {option === 'DELIVERY' && (
                       <span className="lc-checkout__choice-note">
-                        Pedimos a morada para calcular a entrega com a loja — sem custo calculado aqui.
+                        {zones.length > 0
+                          ? 'Escolha a zona de entrega; a tarifa é calculada pelo servidor.'
+                          : 'Pedimos a morada e combinamos a entrega consigo — sem custo calculado aqui.'}
                       </span>
                     )}
                   </span>
                 </label>
               ))}
             </div>
+
+            {fulfillment === 'PICKUP' && store && (
+              <div className="lc-checkout__field">
+                {(store.settings.pickup.address || store.settings.pickup.hours || store.settings.pickup.instructions) && (
+                  <p className="lc-checkout__note">
+                    {[store.settings.pickup.address, store.settings.pickup.hours, store.settings.pickup.instructions]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                )}
+                {store.settings.pickup.askSlot === 'true' && (
+                  <>
+                    <label htmlFor="checkout-pickup-slot">Data e hora pretendidas para levantar</label>
+                    <input
+                      id="checkout-pickup-slot"
+                      maxLength={120}
+                      value={pickupSlot}
+                      onChange={(event) => setPickupSlot(event.target.value)}
+                      placeholder="Ex.: sábado, 15h"
+                    />
+                  </>
+                )}
+              </div>
+            )}
+
+            {fulfillment === 'DELIVERY' && zones.length > 0 && (
+              <div className="lc-checkout__field">
+                <label htmlFor="checkout-zone">Zona de entrega</label>
+                <select
+                  id="checkout-zone"
+                  value={zoneId}
+                  onChange={(event) => setZoneId(event.target.value)}
+                  aria-invalid={Boolean(error?.fieldErrors.deliveryZoneId)}
+                >
+                  <option value="">Escolha a zona…</option>
+                  {zones.map((zone) => (
+                    <option key={zone.id} value={zone.id}>
+                      {zone.name} — {formatKz(zone.fee)}
+                    </option>
+                  ))}
+                </select>
+                {selectedZone && (selectedZone.leadTime || selectedZone.schedule) && (
+                  <p className="lc-checkout__note">{[selectedZone.leadTime, selectedZone.schedule].filter(Boolean).join(' · ')}</p>
+                )}
+                {error?.fieldErrors.deliveryZoneId && (
+                  <p className="lc-checkout__field-error">{error.fieldErrors.deliveryZoneId}</p>
+                )}
+              </div>
+            )}
 
             {fulfillment === 'DELIVERY' && (
               <div className="lc-checkout__grid lc-checkout__grid--address">
@@ -427,7 +519,9 @@ export function CheckoutPage() {
           <section className="lc-checkout__section" aria-labelledby="checkout-pagamento">
             <h2 id="checkout-pagamento">Pagamento</h2>
             <div className="lc-checkout__choices">
-              {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((option) => (
+              {(Object.keys(PAYMENT_LABELS) as PaymentMethod[])
+                .filter((option) => store?.settings.paymentMethods.find((m) => m.method === option)?.enabled !== false)
+                .map((option) => (
                 <label key={option} className="lc-checkout__choice">
                   <input
                     type="radio"
@@ -591,6 +685,22 @@ export function CheckoutPage() {
             </div>
           </section>
 
+          {termsRequired && (
+            <label className="lc-checkout__choice">
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(event) => setTermsAccepted(event.target.checked)}
+              />
+              <span>
+                Li e aceito os <Link to="/informacoes/termos" target="_blank">termos e condições</Link>.
+                {error?.fieldErrors.termsAccepted && (
+                  <span className="lc-checkout__field-error"> {error.fieldErrors.termsAccepted}</span>
+                )}
+              </span>
+            </label>
+          )}
+
           <Button type="submit" size="lg" fullWidth loading={submitting} disabled={!canSubmit}>
             {quote?.valid === false ? 'Corrija o carrinho para continuar' : 'Registar encomenda'}
           </Button>
@@ -623,6 +733,12 @@ export function CheckoutPage() {
               <dt>Total estimado ({cartQuantity(cart)} artigos)</dt>
               <dd>{formatKz(localTotal)}</dd>
             </div>
+            {estimatedFee !== null && (
+              <div className="lc-checkout__total-row">
+                <dt>Entrega ({selectedZone?.name})</dt>
+                <dd>{estimatedFee === 0 ? 'Grátis' : formatKz(estimatedFee)}</dd>
+              </div>
+            )}
             {estimatedDiscount > 0 && (
               <div className="lc-checkout__total-row">
                 <dt>Desconto estimado (fidelização)</dt>
@@ -695,7 +811,7 @@ function Confirmation({ order }: { order: OrderView }) {
           </div>
           <div className="lc-checkout__total-row">
             <dt>Entrega</dt>
-            <dd>{order.deliveryFee === '0.00' ? 'A combinar com a loja' : formatKz(order.deliveryFee)}</dd>
+            <dd>{order.deliveryFee === '0.00' ? (order.deliveryZone ? 'Grátis' : 'A combinar com a loja') : formatKz(order.deliveryFee)}</dd>
           </div>
           {order.discountAmount !== '0.00' && (
             <div className="lc-checkout__total-row">
@@ -726,6 +842,12 @@ function Confirmation({ order }: { order: OrderView }) {
 
         <ButtonLink to="/loja">Continuar a comprar</ButtonLink>
       </Card>
+
+      <PaymentInstructionsCard
+        orderNumber={order.number}
+        method={order.paymentMethod}
+        paymentStatus={order.paymentStatus}
+      />
     </div>
   );
 }

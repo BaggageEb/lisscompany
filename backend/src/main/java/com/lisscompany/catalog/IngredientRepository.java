@@ -11,4 +11,8 @@ public interface IngredientRepository extends JpaRepository<Ingredient, UUID> {
     List<Ingredient> findByKindAndActiveTrueOrderByDisplayOrderAscNameAsc(IngredientKind kind);
 
     Optional<Ingredient> findByIdAndActiveTrue(UUID id);
+
+    List<Ingredient> findAllByOrderByKindAscDisplayOrderAscNameAsc();
+
+    boolean existsBySlug(String slug);
 }

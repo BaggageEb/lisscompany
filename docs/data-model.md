@@ -59,3 +59,14 @@ Requisitos-chave dessas tabelas:
 - **Idempotência** por constraint única para eventos de pagamento e crédito de pontos (uma encomenda nunca credita pontos duas vezes).
 - **Stock nunca negativo** sem regra explícita; movimentos com motivo, quantidade, referência e data; reservas com expiração.
 - **Estados:** encomenda (`RECEIVED→CONFIRMED→PREPARING→READY→COMPLETED`, `CANCELLED`) e pagamento (`PENDING|UNDER_REVIEW|PAID|FAILED|PARTIALLY_REFUNDED|REFUNDED`) mantidos separados, com transições validadas no backend.
+
+
+## V7 — sistema de gestão
+
+- `permission` / `role` / `role_permission` / `user_role`: RBAC com 12 permissões e 4 papéis de sistema; papéis próprios (`is_system = false`) criados pela proprietária. `app_user.is_owner` continua a dar todas as permissões.
+- `product_image`: galeria (URL + posição); `product.image_url` é a fotografia principal. `ingredient.stock_qty`: `NULL` = não controlado, `0` = esgotado.
+- `delivery_zone`: nome, tarifa, entrega grátis a partir de, prazo e horário. `customer_order` ganha `delivery_zone_id`, `delivery_zone_name` (snapshot), `pickup_slot` e `terms_accepted_at`.
+- `payment.proof_reference` / `proof_submitted_at`: referência indicada pelo cliente (nunca marca «pago»). `refund`: reembolsos parciais/totais, auditados e limitados ao valor pago.
+- `order_note`: notas internas por encomenda. `notification` (saída, sem tokens) e `password_reset_token` (só o hash SHA-256, uso único, expira).
+- `reward_rule.goal_kz` e `ck_reward_rule_both_conditions`: recompensa = (pontos **ou** meta em Kz) **E** encomendas.
+- Seed `WELCOME_5` (5%) pré-carregado **desactivado**. O catálogo de demonstração vive em `db/demo` (perfil `demo`).

@@ -1,24 +1,58 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Button, ButtonLink } from '../../components/ui/Button';
 import { Spinner } from '../../components/ui/Spinner';
 import { useSession } from '../../lib/session';
+import { can, hasAdminAccess, type Permission } from '../../lib/permissions';
 import '../account.css';
 import './admin.css';
+import '../../components/admin/admin-ui.css';
 
-const TABS = [
-  { to: '/admin/encomendas', label: 'Encomendas' },
-  { to: '/admin/pagamentos', label: 'Pagamentos' },
-  { to: '/admin/inventario', label: 'Inventário' },
-  { to: '/admin/fidelizacao', label: 'Fidelização' },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: string;
+  permission: Permission;
+  end?: boolean;
+}
+
+const GROUPS: { title: string; items: NavItem[] }[] = [
+  {
+    title: 'Operação',
+    items: [
+      { to: '/admin', label: 'Resumo', icon: '◈', permission: 'DASHBOARD_VIEW', end: true },
+      { to: '/admin/encomendas', label: 'Encomendas', icon: '❒', permission: 'ORDERS_VIEW' },
+      { to: '/admin/pagamentos', label: 'Pagamentos', icon: '✦', permission: 'PAYMENTS_REVIEW' },
+      { to: '/admin/clientes', label: 'Clientes', icon: '☺', permission: 'CUSTOMERS_VIEW' },
+    ],
+  },
+  {
+    title: 'Catálogo',
+    items: [
+      { to: '/admin/produtos', label: 'Bolos e produtos', icon: '❀', permission: 'CATALOG_MANAGE' },
+      { to: '/admin/ingredientes', label: 'Cake Studio', icon: '✎', permission: 'CATALOG_MANAGE' },
+      { to: '/admin/inventario', label: 'Stock', icon: '▤', permission: 'INVENTORY_MANAGE' },
+    ],
+  },
+  {
+    title: 'Clientes e vendas',
+    items: [{ to: '/admin/fidelizacao', label: 'Fidelização', icon: '★', permission: 'LOYALTY_MANAGE' }],
+  },
+  {
+    title: 'Loja',
+    items: [
+      { to: '/admin/definicoes', label: 'Definições', icon: '⚙', permission: 'SETTINGS_MANAGE' },
+      { to: '/admin/equipa', label: 'Equipa e acessos', icon: '☷', permission: 'STAFF_MANAGE' },
+      { to: '/admin/auditoria', label: 'Auditoria', icon: '☰', permission: 'AUDIT_VIEW' },
+    ],
+  },
 ];
 
 /**
- * Envoltória do painel (fase 7).
+ * Sistema de gestão da loja.
  *
- * A autoridade continua no servidor: qualquer `/api/v1/admin/**` responde 403
- * a contas não autorizadas, mesmo que a UI ache o contrário. Aqui a guarda só
- * evita mostrar um painel que não vai funcionar — e diz a verdade quando a
- * conta não tem permissão (sem fingir que a secção existe).
+ * A autoridade é sempre o servidor: qualquer `/api/v1/admin/**` responde 403
+ * a quem não tem a permissão. Aqui o menu só mostra as secções a que a conta
+ * tem acesso, para não apresentar ecrãs que não vão funcionar.
  */
 export function AdminLayout() {
   const session = useSession();
@@ -57,7 +91,8 @@ export function AdminLayout() {
     );
   }
 
-  if (!session.user.owner) {
+  const user = session.user;
+  if (!hasAdminAccess(user)) {
     return (
       <div className="lc-container lc-page lc-orders">
         <header className="lc-orders__head">
@@ -77,33 +112,53 @@ export function AdminLayout() {
     );
   }
 
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => can(user, item.permission)),
+  })).filter((group) => group.items.length > 0);
+
+  // Quem não vê o «Resumo» entra directamente na primeira secção permitida.
+  const first = groups[0]?.items[0];
+  if (location.pathname === '/admin' && first && first.to !== '/admin') {
+    return <Navigate to={first.to} replace />;
+  }
+
   return (
-    <div className="lc-container lc-page lc-admin">
-      <header className="lc-admin__head">
-        <p className="lc-orders__back">
+    <div className="lc-adm">
+      <aside className="lc-adm__side">
+        <div className="lc-adm__brand">
+          <strong>LISSCOMPANY</strong>
+          <span>Gestão da loja</span>
+        </div>
+        <nav aria-label="Secções do painel" style={{ display: 'grid', gap: 'var(--lc-space-4)' }}>
+          {groups.map((group) => (
+            <div key={group.title}>
+              <p className="lc-adm__group-title">{group.title}</p>
+              <div className="lc-adm__nav">
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    className={({ isActive }) => `lc-adm__link${isActive ? ' lc-adm__link--active' : ''}`}
+                  >
+                    <span className="lc-adm__icon" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+        <p className="lc-adm__back">
           <Link to="/conta">← Área do cliente</Link>
         </p>
-        <hr className="lc-ornament" />
-        <h1 className="lc-admin__title">Painel da loja</h1>
-        <p className="lc-admin__lead">
-          Encomendas, pagamentos, stock e regras de fidelização. Tudo é validado e registado no servidor —
-          cada acção sensível fica na auditoria.
-        </p>
-      </header>
-
-      <nav className="lc-admin__tabs" aria-label="Secções do painel">
-        {TABS.map((tab) => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            className={({ isActive }) => `lc-admin__tab${isActive ? ' lc-admin__tab--active' : ''}`}
-          >
-            {tab.label}
-          </NavLink>
-        ))}
-      </nav>
-
-      <Outlet />
+      </aside>
+      <section className="lc-adm__main" aria-label="Conteúdo do painel">
+        <Outlet />
+      </section>
     </div>
   );
 }

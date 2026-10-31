@@ -2,7 +2,7 @@
 
 Bolos no pote e produtos personalizados, com o **LissCompany Cake Studio** como experiência central.
 
-> **Estado: Fases 1–7 concluídas; fase 8 (qualidade) analisada.** O repositório contém o monorepo, o design system, o backend Spring Boot com migrações Flyway verificadas contra PostgreSQL real, a loja pública com Cake Studio, a identidade com sessão + CSRF, carrinho/checkout/encomendas, o inventário com reservas + pagamentos com revisão manual, a fidelização (pontos, recompensas, resgate no checkout) e o painel administrativo (encomendas, pagamentos, inventário, fidelização, perfil do cliente) — com o servidor sempre autoritativo. A revisão final da fase 8 confirmou 77 testes backend e 111 frontend a passar, `tsc` e build de produção limpos, sem código de depuração nem segredos no repositório. O **deploy continua por publicar** (decisão de alojamento pendente). As páginas marcadas como “em construção” ou “por configurar” são honestas: ainda não executam acções.
+> **Estado: Fases 1–7 concluídas + sistema de gestão (V7).** O painel é agora um sistema de gestão completo: resumo com números reais, encomendas (notas, histórico, reembolsos), pagamentos, clientes, bolos e produtos com fotografias e galeria, Cake Studio (massas/recheios/extras com stock), stock, fidelização, definições (contactos, pagamentos, levantamento, zonas de entrega, políticas), equipa com permissões e auditoria. Backend verificado só por análise sintática neste ambiente — **corra `mvn verify` antes de publicar** (os testes de integração usam PostgreSQL real). O **deploy continua por publicar**.
 
 Slogan: _a little bit of everything_ · Moeda: Kwanza (AOA, `Kz`) · Idioma: Português · Mercado: Angola/Luanda
 
@@ -93,3 +93,11 @@ Ainda sem deploy publicado. Estratégia de segurança (hash de palavras-passe, s
 | 6 | Fidelização (saldo, recompensas, resgate no checkout, livro-razão de movimentos) | **Concluída** |
 | 7 | Painel administrativo (encomendas, pagamentos, inventário, fidelização) + perfil/moradas/segurança do cliente | **Concluída** |
 | 8 | Qualidade, testes, performance, acessibilidade, deploy | **Análise concluída** (testes/qualidade OK); deploy por publicar |
+
+
+## Perfis e primeiro arranque
+
+- **Produção/limpo** (por omissão): a base de dados nasce **sem catálogo**. A proprietária entra no painel e cria categorias, bolos (com fotografias), ingredientes do Cake Studio, zonas de entrega, dados de pagamento e contactos.
+- **Desenvolvimento com dados ilustrativos**: `SPRING_PROFILES_ACTIVE=demo` acrescenta o catálogo de demonstração (preços **fictícios**). Nunca usar em produção.
+- Primeira conta da proprietária: registe-se na loja e marque `is_owner = true` na base de dados (um único `UPDATE`, feito por quem administra o servidor).
+- Em produção defina `COOKIE_SECURE=true`, `DOCS_PUBLIC=false` e um volume para `MEDIA_DIR`.

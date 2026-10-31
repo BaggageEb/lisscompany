@@ -1,0 +1,5 @@
+# Perfil «demo»: acrescenta o catálogo ILUSTRATIVO (preços fictícios).
+# NUNCA activar em produção.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/demo

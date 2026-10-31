@@ -116,4 +116,44 @@ public class Product {
     public String getImageUrl() {
         return imageUrl;
     }
+
+    public void setCategory(ProductCategory category) {
+        this.category = category;
+    }
+
+    public void setSlug(String slug) {
+        this.slug = slug;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setDescription(String description) {
+        this.description = description == null ? "" : description;
+    }
+
+    public void setBasePrice(BigDecimal basePrice) {
+        this.basePrice = basePrice;
+    }
+
+    public void setStatus(ProductStatus status) {
+        this.status = status;
+    }
+
+    public void setCakeStudioBase(boolean cakeStudioBase) {
+        this.cakeStudioBase = cakeStudioBase;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
 }

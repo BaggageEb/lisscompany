@@ -30,6 +30,16 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, UU
      */
     long countByUserIdAndStatusNot(UUID userId, OrderStatus status);
 
+    /**
+     * Encomendas ELEGÍVEIS para a condição cumulativa de recompensas: concluídas
+     * e com pagamento confirmado (PAID).
+     */
+    @Query("SELECT COUNT(o) FROM CustomerOrder o WHERE o.userId = :userId"
+            + " AND o.status = com.lisscompany.orders.OrderStatus.COMPLETED"
+            + " AND EXISTS (SELECT 1 FROM com.lisscompany.payments.Payment p WHERE p.orderId = o.id"
+            + " AND p.status = com.lisscompany.payments.PaymentStatus.PAID)")
+    long countEligibleOrders(@org.springframework.data.repository.query.Param("userId") UUID userId);
+
     Optional<CustomerOrder> findByOrderNumber(String orderNumber);
 
     /** Com linhas carregadas — para fora da transacção (ex.: testes a verificar snapshots). */

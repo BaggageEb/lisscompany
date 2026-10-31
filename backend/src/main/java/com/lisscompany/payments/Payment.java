@@ -60,6 +60,12 @@ public class Payment {
     @Column(name = "review_note", length = 500)
     private String reviewNote;
 
+    @Column(name = "proof_reference", length = 200)
+    private String proofReference;
+
+    @Column(name = "proof_submitted_at")
+    private Instant proofSubmittedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -151,5 +157,21 @@ public class Payment {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public String getProofReference() {
+        return proofReference;
+    }
+
+    public void setProofReference(String proofReference) {
+        this.proofReference = proofReference;
+    }
+
+    public Instant getProofSubmittedAt() {
+        return proofSubmittedAt;
+    }
+
+    public void setProofSubmittedAt(Instant proofSubmittedAt) {
+        this.proofSubmittedAt = proofSubmittedAt;
     }
 }

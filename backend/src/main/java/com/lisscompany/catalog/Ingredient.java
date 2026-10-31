@@ -52,6 +52,10 @@ public class Ingredient {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
+    /** {@code null} = stock não controlado; {@code 0} = esgotado. */
+    @Column(name = "stock_qty")
+    private Integer stockQty;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -103,5 +107,50 @@ public class Ingredient {
 
     public String getImageUrl() {
         return imageUrl;
+    }
+
+    public Integer getStockQty() {
+        return stockQty;
+    }
+
+    public void setStockQty(Integer stockQty) {
+        this.stockQty = stockQty;
+    }
+
+    /** Disponível para venda: activo e (sem controlo de stock ou com stock). */
+    public boolean isAvailable() {
+        return active && (stockQty == null || stockQty > 0);
+    }
+
+    public void setKind(IngredientKind kind) {
+        this.kind = kind;
+    }
+
+    public void setSlug(String slug) {
+        this.slug = slug;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setDescription(String description) {
+        this.description = description == null ? "" : description;
+    }
+
+    public void setPriceDelta(BigDecimal priceDelta) {
+        this.priceDelta = priceDelta;
+    }
+
+    public void setDisplayOrder(int displayOrder) {
+        this.displayOrder = displayOrder;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
     }
 }

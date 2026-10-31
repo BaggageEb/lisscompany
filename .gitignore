@@ -23,3 +23,18 @@ npm-debug.log*
 *.iml
 .vscode/
 .DS_Store
+
+# Segredos soltos: scripts SQL/shell na raiz com credenciais NUNCA se versionam
+/*.sql
+/*.sh
+
+# Imagens carregadas no painel (volume persistente em produção)
+backend/data/
+data/media/
+.neon
+
+# Ficheiros locais e credenciais
+/backend/arrancar.ps1
+/neon.ts
+/package.json
+/package-lock.json

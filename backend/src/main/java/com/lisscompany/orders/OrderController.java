@@ -62,7 +62,10 @@ public class OrderController {
             /** Pontos de fidelização a resgatar (fase 6; 0/ausente = nenhum). */
             @Min(value = 0, message = "Os pontos não podem ser negativos.") Integer pointsToSpend,
             /** Código público da recompensa escolhida (fase 6; ausente = nenhuma). */
-            @Size(max = 40, message = "Recompensa demasiado longa.") String rewardCode) {}
+            @Size(max = 40, message = "Recompensa demasiado longa.") String rewardCode,
+            @Size(max = 60) String deliveryZoneId,
+            @Size(max = 120, message = "Janela de levantamento demasiado longa.") String pickupSlot,
+            Boolean termsAccepted) {}
 
     private final OrderService service;
 
@@ -86,7 +89,10 @@ public class OrderController {
                 toProductLines(request.productLines()),
                 toCakeLines(request.cakeLines()),
                 request.pointsToSpend(),
-                request.rewardCode()));
+                request.rewardCode(),
+                request.deliveryZoneId(),
+                request.pickupSlot(),
+                request.termsAccepted()));
     }
 
     @GetMapping

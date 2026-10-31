@@ -69,4 +69,20 @@ public class ProductCategory {
     public int getDisplayOrder() {
         return displayOrder;
     }
+
+    public void setSlug(String slug) {
+        this.slug = slug;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public void setDisplayOrder(int displayOrder) {
+        this.displayOrder = displayOrder;
+    }
 }

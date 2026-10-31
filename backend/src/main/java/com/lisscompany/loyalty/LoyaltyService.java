@@ -19,6 +19,8 @@ import com.lisscompany.identity.CustomerPrincipal;
 import com.lisscompany.orders.CustomerOrder;
 import com.lisscompany.orders.CustomerOrderRepository;
 import com.lisscompany.orders.OrderStatus;
+import com.lisscompany.payments.PaymentRepository;
+import com.lisscompany.payments.PaymentStatus;
 import com.lisscompany.promotions.DiscountApplication;
 import com.lisscompany.promotions.DiscountApplicationRepository;
 import com.lisscompany.promotions.DiscountRule;
@@ -71,6 +73,7 @@ public class LoyaltyService {
     private final CustomerOrderRepository orderRepository;
     private final AppUserRepository userRepository;
     private final AuditService auditService;
+    private final PaymentRepository paymentRepository;
 
     public LoyaltyService(
             LoyaltyRuleRepository ruleRepository,
@@ -82,7 +85,9 @@ public class LoyaltyService {
             DiscountApplicationRepository applicationRepository,
             CustomerOrderRepository orderRepository,
             AppUserRepository userRepository,
-            AuditService auditService) {
+            AuditService auditService,
+            PaymentRepository paymentRepository) {
+        this.paymentRepository = paymentRepository;
         this.ruleRepository = ruleRepository;
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
@@ -119,7 +124,8 @@ public class LoyaltyService {
             Integer minOrders,
             String discountAmount,
             int maxPerCustomer,
-            boolean active) {}
+            boolean active,
+            String goalKz) {}
 
     public record RewardInput(
             String code,
@@ -128,7 +134,8 @@ public class LoyaltyService {
             Integer minOrders,
             String discountAmount,
             Integer maxPerCustomer,
-            Boolean active) {}
+            Boolean active,
+            String goalKz) {}
 
     /** Estado de uma recompensa para UM cliente (resumo do painel de cliente). */
     public record RewardStatusView(RewardView reward, boolean eligible, String reason, int redeemedCount) {}
@@ -190,17 +197,18 @@ public class LoyaltyService {
         RuleView ruleView = rule == null ? null : ruleView(rule);
         LoyaltyAccount account = accountRepository.findByUserId(userId).orElse(null);
         int balance = account == null ? 0 : account.getPointsBalance();
-        long orders = orderRepository.countByUserIdAndStatusNot(userId, OrderStatus.CANCELLED);
+        long orders = orderRepository.countEligibleOrders(userId);
+        long placedOrders = orderRepository.countByUserIdAndStatusNot(userId, OrderStatus.CANCELLED);
         boolean programActive = rule != null && rule.isActive();
 
-        WelcomeView welcome = welcomeView(userId, orders);
+        WelcomeView welcome = welcomeView(userId, placedOrders);
 
         List<RewardStatusView> rewards = rewardRuleRepository.findByActiveTrueOrderByCodeAsc().stream()
                 .map(reward -> {
                     int redeemed = redeemedCount(account, reward);
                     String reason = programActive ? null : inactiveReason(rule);
                     if (reason == null) {
-                        reason = ineligibleReason(reward, balance, orders, redeemed);
+                        reason = ineligibleReason(reward, rule, balance, orders, redeemed);
                     }
                     return new RewardStatusView(rewardView(reward), reason == null, reason, redeemed);
                 })
@@ -339,8 +347,22 @@ public class LoyaltyService {
         if (description == null) {
             errors.put("description", "A descrição é obrigatória (é o rótulo que o cliente vê).");
         }
-        if (input.minPoints() == null && input.minOrders() == null) {
-            errors.put("minPoints", "Defina um limiar de pontos, de encomendas, ou ambos.");
+        BigDecimal goalKz = null;
+        if (input.goalKz() != null && !input.goalKz().isBlank()) {
+            goalKz = decimal(input.goalKz(), "goalKz", errors);
+            if (goalKz != null && goalKz.signum() <= 0) {
+                errors.put("goalKz", "A meta em Kz tem de ser positiva.");
+            }
+        }
+        // Lógica AND obrigatória: (pontos OU meta em Kz que os define) E encomendas.
+        if (input.minPoints() == null && goalKz == null) {
+            errors.put("minPoints", "Defina o limiar de pontos (ou a meta em Kz).");
+        }
+        if (input.minOrders() == null) {
+            errors.put("minOrders", "Defina o número mínimo de encomendas: a recompensa exige pontos E encomendas.");
+        }
+        if (goalKz != null && input.maxPerCustomer() != null && input.maxPerCustomer() != 1) {
+            errors.put("maxPerCustomer", "A recompensa da meta em Kz é de utilização única (1).");
         }
         if (input.minPoints() != null && input.minPoints() < 1) {
             errors.put("minPoints", "O limiar de pontos tem de ser pelo menos 1.");
@@ -367,6 +389,7 @@ public class LoyaltyService {
         reward.setDescription(description);
         reward.setMinPoints(input.minPoints());
         reward.setMinOrders(input.minOrders());
+        reward.setGoalKz(goalKz);
         reward.setDiscountAmount(discountAmount);
         reward.setMaxPerCustomer(input.maxPerCustomer());
         reward.setActive(input.active());
@@ -481,6 +504,10 @@ public class LoyaltyService {
         boolean wantsPoints = pointsRequested > 0;
         boolean wantsReward = rewardCode != null && !rewardCode.isBlank();
         LoyaltyRule rule = ruleRepository.findTopByOrderByIdDesc().orElse(null);
+
+        // Serializa pedidos simultâneos do mesmo cliente (pontos, recompensa e
+        // boas-vindas nunca são gastos duas vezes): bloqueio da conta até ao commit.
+        accountFor(userId);
 
         if (wantsPoints || wantsReward) {
             if (rule == null) {
@@ -643,6 +670,16 @@ public class LoyaltyService {
      */
     @Transactional
     public void creditFor(CustomerOrder order, UUID actorUserId, String actorLabel) {
+        // Só encomendas CONCLUÍDAS e com pagamento CONFIRMADO geram pontos.
+        if (order.getStatus() != OrderStatus.COMPLETED) {
+            return;
+        }
+        boolean paid = paymentRepository.findByOrderId(order.getId())
+                .map(payment -> payment.getStatus() == PaymentStatus.PAID)
+                .orElse(false);
+        if (!paid) {
+            return;
+        }
         Optional<LoyaltyRule> maybeRule = ruleRepository.findTopByOrderByIdDesc();
         if (maybeRule.isEmpty() || !maybeRule.get().isActive()) {
             return; // Programa por configurar/pausado: o pagamento nunca falha por isso.
@@ -694,6 +731,42 @@ public class LoyaltyService {
                                 account.getPointsBalance()));
     }
 
+    /**
+     * Reembolso de pagamento: estorna, proporcionalmente, os pontos ganhos com
+     * a encomenda (nunca deixa o saldo negativo). Fica um ajuste auditável no
+     * livro-razão — o histórico original não é reescrito.
+     */
+    @Transactional
+    public void reverseOnRefund(
+            CustomerOrder order, BigDecimal refunded, BigDecimal paid, UUID actorUserId, String actorLabel) {
+        Optional<LoyaltyTransaction> earned = transactionRepository
+                .findByAccountIdOrderByCreatedAtDesc(accountFor(order.getUserId()).getId()).stream()
+                .filter(t -> t.getType() == LoyaltyTransactionType.EARN && order.getId().equals(t.getOrderId()))
+                .findFirst();
+        if (earned.isEmpty() || paid.signum() <= 0) {
+            return;
+        }
+        int toRemove = new BigDecimal(earned.get().getPoints())
+                .multiply(refunded).divide(paid, 0, RoundingMode.DOWN).intValue();
+        LoyaltyAccount account = accountFor(order.getUserId());
+        toRemove = Math.min(toRemove, account.getPointsBalance());
+        if (toRemove <= 0) {
+            return;
+        }
+        LoyaltyRule rule = ruleRepository.findTopByOrderByIdDesc().orElse(null);
+        BigDecimal rate = rule == null ? BigDecimal.ONE : rule.getPointValueKz();
+        account.apply(-toRemove);
+        accountRepository.save(account);
+        saveTransaction(account, null, LoyaltyTransactionType.ADJUSTMENT, -toRemove, LoyaltyRateKind.POINT_VALUE,
+                rate, pointsValue(toRemove, rate),
+                "Estorno de pontos por reembolso da encomenda " + order.getOrderNumber(), actorUserId);
+        auditService.record(actorUserId, actorLabel, "loyalty.points_reversed", "customer_order",
+                order.getId().toString(),
+                "Encomenda %s · reembolso %s Kz · −%d pontos · saldo %d".formatted(
+                        order.getOrderNumber(), refunded.setScale(2, RoundingMode.HALF_UP), toRemove,
+                        account.getPointsBalance()));
+    }
+
     /* ------------------------------ Internos ----------------------------- */
 
     private AppliedDiscount pointsDiscount(UUID userId, BigDecimal subtotal, int pointsRequested, LoyaltyRule rule) {
@@ -735,10 +808,10 @@ public class LoyaltyService {
 
         LoyaltyAccount account = accountRepository.findByUserId(userId).orElse(null);
         int balance = account == null ? 0 : account.getPointsBalance();
-        long orders = orderRepository.countByUserIdAndStatusNot(userId, OrderStatus.CANCELLED);
+        long orders = orderRepository.countEligibleOrders(userId);
         int redeemed = redeemedCount(account, reward);
 
-        String reason = ineligibleReason(reward, balance, orders, redeemed);
+        String reason = ineligibleReason(reward, rule, balance, orders, redeemed);
         if (reason != null) {
             throw new InvalidRequestException(Map.of("rewardCode", reason));
         }
@@ -785,15 +858,16 @@ public class LoyaltyService {
     }
 
     /** Motivo de indisponibilidade de uma recompensa, ou {@code null} se elegível. */
-    private String ineligibleReason(RewardRule reward, int balance, long orders, int redeemed) {
+    private String ineligibleReason(RewardRule reward, LoyaltyRule rule, int balance, long orders, int redeemed) {
         List<String> missing = new ArrayList<>(2);
-        if (reward.getMinPoints() != null && balance < reward.getMinPoints()) {
-            missing.add("ainda precisa de " + (reward.getMinPoints() - balance) + " ponto(s)");
+        Integer requiredPoints = requiredPoints(reward, rule);
+        if (requiredPoints != null && balance < requiredPoints) {
+            missing.add("ainda precisa de " + (requiredPoints - balance) + " ponto(s)");
         }
         if (reward.getMinOrders() != null && orders < reward.getMinOrders()) {
-            missing.add("ainda precisa de " + (reward.getMinOrders() - orders) + " encomenda(s)");
+            missing.add("ainda precisa de " + (reward.getMinOrders() - orders) + " encomenda(s) concluída(s) e paga(s)");
         }
-        // Condição cumulativa: pontos E encomendas quando ambas definidas (#13).
+        // Condição cumulativa: pontos E encomendas — as duas são obrigatórias (#13).
         if (!missing.isEmpty()) {
             return "Recompensa indisponível: " + String.join(" e ", missing) + ".";
         }
@@ -801,6 +875,14 @@ public class LoyaltyService {
             return "Recompensa já resgatada (limite de " + reward.getMaxPerCustomer() + " por cliente).";
         }
         return null;
+    }
+
+    /** Pontos exigidos: os fixados, ou os que equivalem à meta em Kz pela conversão em vigor. */
+    private static Integer requiredPoints(RewardRule reward, LoyaltyRule rule) {
+        if (reward.getGoalKz() != null && rule != null) {
+            return reward.getGoalKz().divide(rule.getPointValueKz(), 0, RoundingMode.UP).intValueExact();
+        }
+        return reward.getMinPoints();
     }
 
     private String inactiveReason(LoyaltyRule rule) {
@@ -816,10 +898,11 @@ public class LoyaltyService {
     }
 
     private LoyaltyAccount accountFor(UUID userId) {
-        return accountRepository.findByUserId(userId).orElseGet(() -> {
+        return accountRepository.findByUserIdForUpdate(userId).orElseGet(() -> {
             LoyaltyAccount account = new LoyaltyAccount();
             account.setUserId(userId);
-            return accountRepository.save(account);
+            accountRepository.saveAndFlush(account);
+            return accountRepository.findByUserIdForUpdate(userId).orElse(account);
         });
     }
 
@@ -883,7 +966,8 @@ public class LoyaltyService {
                 reward.getMinOrders(),
                 reward.getDiscountAmount().setScale(2, RoundingMode.HALF_UP).toPlainString(),
                 reward.getMaxPerCustomer(),
-                reward.isActive());
+                reward.isActive(),
+                reward.getGoalKz() == null ? null : reward.getGoalKz().setScale(2, RoundingMode.HALF_UP).toPlainString());
     }
 
     private static BigDecimal decimal(String raw, String field, Map<String, String> errors) {

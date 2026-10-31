@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useStoreInfo } from '../../lib/store';
 import './footer.css';
 
 /**
@@ -7,6 +8,9 @@ import './footer.css';
  * apresentados dados inventados aqui.
  */
 export function Footer() {
+  const store = useStoreInfo();
+  const contacts = store?.settings.contacts ?? {};
+  const hasContacts = Object.values(contacts).some(Boolean);
   return (
     <footer className="lc-footer">
       <div className="lc-container lc-footer__grid">
@@ -36,15 +40,23 @@ export function Footer() {
           <h2 className="lc-footer__heading">Informações</h2>
           <Link to="/contactos">Contactos</Link>
           <Link to="/informacoes/entrega">Entrega e levantamento</Link>
-          <Link to="/informacoes/politicas">Políticas</Link>
+          <Link to="/informacoes/termos">Termos e condições</Link>
+          <Link to="/informacoes/privacidade">Privacidade</Link>
+          <Link to="/informacoes/cancelamentos">Cancelamentos e reembolsos</Link>
         </nav>
       </div>
 
       <div className="lc-container lc-footer__bottom">
         <p>© {new Date().getFullYear()} LISSCOMPANY. Todos os direitos reservados.</p>
-        <p className="lc-footer__muted">
-          Contactos, morada e horários serão publicados assim que confirmados pela proprietária.
-        </p>
+        {hasContacts ? (
+          <p className="lc-footer__muted">
+            {[contacts.phone, contacts.email, contacts.address].filter(Boolean).join(' · ')}
+          </p>
+        ) : (
+          <p className="lc-footer__muted">
+            Contactos, morada e horários serão publicados assim que confirmados pela proprietária.
+          </p>
+        )}
       </div>
     </footer>
   );

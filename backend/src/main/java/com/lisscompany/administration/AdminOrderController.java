@@ -18,6 +18,7 @@ import com.lisscompany.orders.OrderStatus;
 import com.lisscompany.payments.PaymentStatus;
 import com.lisscompany.shared.error.UnauthorizedException;
 import com.lisscompany.shared.security.OwnerGuard;
+import com.lisscompany.shared.security.Permissions;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -52,14 +53,14 @@ public class AdminOrderController {
     public List<OrderService.AdminOrderSummaryView> list(
             @RequestParam(name = "status", required = false) OrderStatus status,
             @RequestParam(name = "paymentStatus", required = false) PaymentStatus paymentStatus) {
-        ownerGuard.requireOwner(principal().id());
+        ownerGuard.require(principal().id(), Permissions.ORDERS_VIEW);
         return service.listForPanel(status, paymentStatus);
     }
 
     /** Detalhe de qualquer encomenda + transições que a máquina de estados aceita. */
     @GetMapping("/{orderNumber}")
     public OrderService.AdminOrderDetailView detail(@PathVariable String orderNumber) {
-        ownerGuard.requireOwner(principal().id());
+        ownerGuard.require(principal().id(), Permissions.ORDERS_VIEW);
         return service.getForPanel(orderNumber);
     }
 
@@ -68,7 +69,7 @@ public class AdminOrderController {
     public OrderService.OrderView transition(
             @PathVariable String orderNumber, @Valid @RequestBody TransitionRequest request) {
         CustomerPrincipal principal = principal();
-        ownerGuard.requireOwner(principal.id());
+        ownerGuard.require(principal.id(), Permissions.ORDERS_MANAGE);
         return service.transition(principal, orderNumber, request.target(), request.note());
     }
 

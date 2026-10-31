@@ -119,7 +119,9 @@ async function apiFetchInternal<T>(path: string, init: RequestInit, isRetry: boo
     if (response.status === 204) {
       return undefined as T;
     }
-    return (await response.json()) as T;
+    // Respostas de sucesso sem corpo (ex.: 202 do pedido de recuperação) não são erro.
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as T;
   }
 
   let body: ApiErrorBody = {};
@@ -173,6 +175,10 @@ export interface ProductSummary {
   categorySlug: string;
   categoryName: string;
   available: boolean;
+  /** Galeria de fotografias (além da imagem principal). */
+  gallery?: string[];
+  /** Unidades disponíveis; null/ausente = stock não controlado. */
+  stockQty?: number | null;
 }
 
 /**
@@ -278,6 +284,8 @@ export interface AuthUser {
   phone?: string | null;
   /** Conta autorizada para o painel (fase 7) — a autorização é do servidor. */
   owner?: boolean;
+  /** Permissões efectivas do painel (a proprietária tem todas). Só serve para mostrar menus. */
+  permissions?: string[];
 }
 
 export function registerAccount(body: {
@@ -352,6 +360,9 @@ export interface OrderView {
   total: string;
   currency: 'AOA';
   items: OrderItemView[];
+  /** Zona de entrega (snapshot) e janela de levantamento escolhida. */
+  deliveryZone?: string | null;
+  pickupSlot?: string | null;
 }
 
 export interface OrderSummaryView {
@@ -387,6 +398,12 @@ export interface CreateOrderBody {
   pointsToSpend?: number;
   /** Código público da recompensa escolhida (fase 6; um desconto por encomenda). */
   rewardCode?: string;
+  /** Zona de entrega (obrigatória quando a loja tem zonas activas). */
+  deliveryZoneId?: string;
+  /** Janela de levantamento (opcional). */
+  pickupSlot?: string;
+  /** Aceitação dos termos (obrigatória quando a loja os publicou). */
+  termsAccepted?: boolean;
 }
 
 /** Cria a encomenda: o servidor revalida o carrinho e responde 422 se algo mudou. */
@@ -617,6 +634,7 @@ export interface PaymentAdminView {
   createdAt: string;
   reviewedAt: string | null;
   reviewNote: string | null;
+  proofReference?: string | null;
 }
 
 export interface StockView {
@@ -644,6 +662,8 @@ export interface LoyaltyAdminRewardView {
   discountAmount: string;
   maxPerCustomer: number;
   active: boolean;
+  /** Meta em Kz (ex.: 10000): os pontos exigidos derivam da conversão em vigor. */
+  goalKz?: string | null;
 }
 
 export interface LoyaltyAdminConfig {
@@ -667,6 +687,7 @@ export interface LoyaltyAdminRewardBody {
   discountAmount: string;
   maxPerCustomer: number;
   active: boolean;
+  goalKz?: string;
 }
 
 export interface DiscountRuleView {
@@ -755,6 +776,8 @@ export interface PaymentServiceView {
   status: string;
   reviewedAt: string | null;
   reviewNote: string | null;
+  proofReference?: string | null;
+  refundedAmount?: string;
 }
 
 export function fetchAdminStock(signal?: AbortSignal): Promise<StockView[]> {
@@ -819,3 +842,349 @@ export function adjustLoyaltyPoints(
     },
   );
 }
+
+
+/* ------------------------------------------------------------------ *
+ * Sistema de gestão (V7): loja pública, catálogo, definições, equipa
+ * ------------------------------------------------------------------ */
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+function jsonBody(method: string, body: unknown): RequestInit {
+  return { method, headers: JSON_HEADERS, body: JSON.stringify(body) };
+}
+
+/** Zona de entrega configurada pela proprietária. */
+export interface DeliveryZone {
+  id: string;
+  name: string;
+  fee: string;
+  freeOver: string | null;
+  leadTime: string | null;
+  schedule: string | null;
+  active: boolean;
+  displayOrder: number;
+}
+
+export interface StoreMethodView {
+  method: PaymentMethod;
+  enabled: boolean;
+  configured: boolean;
+}
+
+export interface PublicStoreSettings {
+  contacts: Record<string, string>;
+  pickup: Record<string, string>;
+  pickupEnabled: boolean;
+  deliveryEnabled: boolean;
+  deliveryNotes: string;
+  paymentMethods: StoreMethodView[];
+  policies: Record<string, string>;
+  termsRequired: boolean;
+}
+
+export interface StoreInfo {
+  settings: PublicStoreSettings;
+  deliveryZones: DeliveryZone[];
+}
+
+/** Informação pública da loja (contactos, políticas, métodos, zonas). Nunca inclui dados bancários. */
+export function fetchStoreInfo(signal?: AbortSignal): Promise<StoreInfo> {
+  return apiFetch<StoreInfo>('/api/v1/public/store', { signal });
+}
+
+export interface PaymentInstructions {
+  method: PaymentMethod;
+  holder: string | null;
+  iban: string | null;
+  number: string | null;
+  note: string | null;
+}
+
+export interface OrderPaymentView {
+  status: string;
+  amount: string;
+  instructions: PaymentInstructions;
+  proofReference: string | null;
+}
+
+/** Instruções de pagamento — só para o dono da encomenda. */
+export function fetchOrderPayment(orderNumber: string, signal?: AbortSignal): Promise<OrderPaymentView> {
+  return apiFetch<OrderPaymentView>(`/api/v1/orders/${encodeURIComponent(orderNumber)}/payment`, { signal });
+}
+
+/** O cliente indica a referência do pagamento; nunca marca «pago». */
+export function submitPaymentProof(orderNumber: string, reference: string): Promise<PaymentServiceView> {
+  return apiFetch<PaymentServiceView>(
+    `/api/v1/orders/${encodeURIComponent(orderNumber)}/payment/proof`,
+    jsonBody('POST', { reference }),
+  );
+}
+
+export function requestPasswordReset(email: string): Promise<void> {
+  return apiFetch<void>('/api/v1/auth/forgot', jsonBody('POST', { email }));
+}
+
+export function resetPassword(token: string, newPassword: string): Promise<void> {
+  return apiFetch<void>('/api/v1/auth/reset', jsonBody('POST', { token, newPassword }));
+}
+
+/* ----- Dashboard, clientes, auditoria ----- */
+
+export interface AdminDashboard {
+  ordersReceived: number;
+  ordersConfirmed: number;
+  ordersPreparing: number;
+  ordersReady: number;
+  ordersCompleted: number;
+  paymentsToReview: number;
+  confirmedSales: string;
+  salesLast7Days: string;
+  refundedTotal: string;
+  customers: number;
+  lowStockProducts: { name: string; qty: number }[];
+  soldOutProducts: number;
+  soldOutIngredients: number;
+  activeProducts: number;
+  rewardsRedeemed: number;
+  loyaltyPointsOutstanding: number;
+  recentOrders: { number: string; status: string; total: string; contactName: string; createdAt: string }[];
+}
+
+export function fetchAdminDashboard(signal?: AbortSignal): Promise<AdminDashboard> {
+  return apiFetch<AdminDashboard>('/api/v1/admin/dashboard', { signal });
+}
+
+export interface AdminCustomer {
+  id: string;
+  email: string;
+  displayName: string;
+  phone: string | null;
+  status: string;
+  createdAt: string;
+  orders: number;
+  spent: string;
+  points: number;
+}
+
+export function fetchAdminCustomers(signal?: AbortSignal): Promise<AdminCustomer[]> {
+  return apiFetch<AdminCustomer[]>('/api/v1/admin/customers', { signal });
+}
+
+export interface AuditEntry {
+  id: number;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  actor: string | null;
+  details: string | null;
+  createdAt: string;
+}
+
+export function fetchAdminAudit(q: string, signal?: AbortSignal): Promise<AuditEntry[]> {
+  return apiFetch<AuditEntry[]>(withQuery('/api/v1/admin/audit', { q }), { signal });
+}
+
+/* ----- Catálogo ----- */
+
+export interface AdminProduct {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  basePrice: string;
+  status: 'ACTIVE' | 'HIDDEN' | 'ARCHIVED' | string;
+  cakeStudioBase: boolean;
+  categoryId: string;
+  categoryName: string;
+  imageUrl: string | null;
+  gallery: string[];
+  stockQty: number | null;
+  updatedAt: string;
+}
+
+export interface AdminProductBody {
+  name: string;
+  description: string;
+  basePrice: string;
+  categoryId: string;
+  status: string;
+  cakeStudioBase: boolean;
+  imageUrl: string | null;
+  gallery: string[];
+}
+
+export interface AdminCategory {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  displayOrder: number;
+  products: number;
+}
+
+export interface AdminIngredient {
+  id: string;
+  kind: 'DOUGH' | 'FILLING' | 'EXTRA' | string;
+  slug: string;
+  name: string;
+  description: string;
+  priceDelta: string;
+  displayOrder: number;
+  active: boolean;
+  imageUrl: string | null;
+  stockQty: number | null;
+  available: boolean;
+}
+
+export interface AdminIngredientBody {
+  kind: string;
+  name: string;
+  description: string;
+  priceDelta: string;
+  displayOrder: number;
+  active: boolean;
+  imageUrl: string | null;
+  trackStock: boolean;
+  stockQty: number | null;
+}
+
+export const fetchAdminProducts = (signal?: AbortSignal) =>
+  apiFetch<AdminProduct[]>('/api/v1/admin/catalog/products', { signal });
+export const createAdminProduct = (body: AdminProductBody) =>
+  apiFetch<AdminProduct>('/api/v1/admin/catalog/products', jsonBody('POST', body));
+export const updateAdminProduct = (id: string, body: AdminProductBody) =>
+  apiFetch<AdminProduct>(`/api/v1/admin/catalog/products/${id}`, jsonBody('PUT', body));
+
+export const fetchAdminCategories = (signal?: AbortSignal) =>
+  apiFetch<AdminCategory[]>('/api/v1/admin/catalog/categories', { signal });
+export const saveAdminCategory = (id: string | null, body: { name: string; description?: string; displayOrder?: number }) =>
+  apiFetch<AdminCategory>(
+    id ? `/api/v1/admin/catalog/categories/${id}` : '/api/v1/admin/catalog/categories',
+    jsonBody(id ? 'PUT' : 'POST', body),
+  );
+export const deleteAdminCategory = (id: string) =>
+  apiFetch<void>(`/api/v1/admin/catalog/categories/${id}`, { method: 'DELETE' });
+
+export const fetchAdminIngredients = (signal?: AbortSignal) =>
+  apiFetch<AdminIngredient[]>('/api/v1/admin/catalog/ingredients', { signal });
+export const saveAdminIngredient = (id: string | null, body: AdminIngredientBody) =>
+  apiFetch<AdminIngredient>(
+    id ? `/api/v1/admin/catalog/ingredients/${id}` : '/api/v1/admin/catalog/ingredients',
+    jsonBody(id ? 'PUT' : 'POST', body),
+  );
+
+/** Carrega uma imagem (PNG/JPEG/WebP até 5 MB) e devolve o URL público. */
+export function uploadAdminImage(file: File): Promise<{ url: string }> {
+  const form = new FormData();
+  form.append('file', file);
+  const signal = typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(30_000) : undefined;
+  return apiFetch<{ url: string }>('/api/v1/admin/media', { method: 'POST', body: form, signal });
+}
+
+/* ----- Definições e entrega ----- */
+
+export type AdminSettings = Record<string, string>;
+
+export const fetchAdminSettings = (signal?: AbortSignal) =>
+  apiFetch<AdminSettings>('/api/v1/admin/settings', { signal });
+export const saveAdminSettings = (changes: AdminSettings) =>
+  apiFetch<AdminSettings>('/api/v1/admin/settings', jsonBody('PUT', changes));
+
+export interface DeliveryZoneBody {
+  name: string;
+  fee: string;
+  freeOver?: string;
+  leadTime?: string;
+  schedule?: string;
+  active: boolean;
+  displayOrder?: number;
+}
+
+export const fetchAdminZones = (signal?: AbortSignal) =>
+  apiFetch<DeliveryZone[]>('/api/v1/admin/delivery-zones', { signal });
+export const saveAdminZone = (id: string | null, body: DeliveryZoneBody) =>
+  apiFetch<DeliveryZone>(
+    id ? `/api/v1/admin/delivery-zones/${id}` : '/api/v1/admin/delivery-zones',
+    jsonBody(id ? 'PUT' : 'POST', body),
+  );
+export const deleteAdminZone = (id: string) =>
+  apiFetch<void>(`/api/v1/admin/delivery-zones/${id}`, { method: 'DELETE' });
+
+/* ----- Equipa (contas secundárias, papéis e permissões) ----- */
+
+export interface AdminRole {
+  id: string;
+  code: string;
+  name: string;
+  system: boolean;
+  permissions: string[];
+}
+
+export interface AdminPermission {
+  code: string;
+  description: string;
+}
+
+export interface AdminStaff {
+  id: string;
+  email: string;
+  displayName: string;
+  status: string;
+  owner: boolean;
+  roles: string[];
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface CreatedStaff {
+  user: AdminStaff;
+  temporaryPassword: string;
+}
+
+export const fetchAdminStaff = (signal?: AbortSignal) => apiFetch<AdminStaff[]>('/api/v1/admin/staff', { signal });
+export const fetchAdminRoles = (signal?: AbortSignal) => apiFetch<AdminRole[]>('/api/v1/admin/roles', { signal });
+export const fetchAdminPermissions = (signal?: AbortSignal) =>
+  apiFetch<AdminPermission[]>('/api/v1/admin/permissions', { signal });
+export const createAdminStaff = (body: { email: string; displayName: string; roleIds: string[] }) =>
+  apiFetch<CreatedStaff>('/api/v1/admin/staff', jsonBody('POST', body));
+export const updateAdminStaff = (id: string, body: { displayName?: string; status?: string; roleIds?: string[] }) =>
+  apiFetch<AdminStaff>(`/api/v1/admin/staff/${id}`, jsonBody('PUT', body));
+export const resetAdminStaffPassword = (id: string) =>
+  apiFetch<CreatedStaff>(`/api/v1/admin/staff/${id}/reset-password`, { method: 'POST' });
+export const saveAdminRole = (id: string | null, body: { name: string; permissions: string[] }) =>
+  apiFetch<AdminRole>(id ? `/api/v1/admin/roles/${id}` : '/api/v1/admin/roles', jsonBody(id ? 'PUT' : 'POST', body));
+
+/* ----- Encomendas: notas, histórico, reembolsos ----- */
+
+export interface OrderNote {
+  author: string | null;
+  body: string;
+  createdAt: string;
+}
+
+export interface OrderHistoryEntry {
+  action: string;
+  actor: string | null;
+  details: string | null;
+  createdAt: string;
+}
+
+export interface RefundEntry {
+  amount: string;
+  reason: string;
+  reference: string | null;
+  createdAt: string;
+}
+
+const orderOps = (n: string) => `/api/v1/admin/orders/${encodeURIComponent(n)}`;
+export const fetchOrderNotes = (n: string, signal?: AbortSignal) =>
+  apiFetch<OrderNote[]>(`${orderOps(n)}/notes`, { signal });
+export const addOrderNote = (n: string, body: string) =>
+  apiFetch<OrderNote[]>(`${orderOps(n)}/notes`, jsonBody('POST', { body }));
+export const fetchOrderHistory = (n: string, signal?: AbortSignal) =>
+  apiFetch<OrderHistoryEntry[]>(`${orderOps(n)}/history`, { signal });
+export const fetchOrderRefunds = (n: string, signal?: AbortSignal) =>
+  apiFetch<RefundEntry[]>(`${orderOps(n)}/refunds`, { signal });
+export const refundOrderPayment = (n: string, body: { amount: string; reason: string; reference?: string }) =>
+  apiFetch<PaymentServiceView>(`${orderOps(n)}/refund`, jsonBody('POST', body));

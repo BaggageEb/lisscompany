@@ -51,6 +51,7 @@ public class AuthService {
     private final HttpSessionSecurityContextRepository securityContextRepository;
     private final UserSessionRegistry sessionRegistry;
     private final com.lisscompany.audit.AuditService auditService;
+    private final com.lisscompany.shared.security.OwnerGuard ownerGuard;
 
     public AuthService(
             AppUserRepository userRepository,
@@ -58,7 +59,9 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             HttpSessionSecurityContextRepository securityContextRepository,
             UserSessionRegistry sessionRegistry,
-            com.lisscompany.audit.AuditService auditService) {
+            com.lisscompany.audit.AuditService auditService,
+            com.lisscompany.shared.security.OwnerGuard ownerGuard) {
+        this.ownerGuard = ownerGuard;
         this.userRepository = userRepository;
         this.profileRepository = profileRepository;
         this.passwordEncoder = passwordEncoder;
@@ -73,7 +76,8 @@ public class AuthService {
      * `owner` diz à UI (a autorização continua no servidor) se a conta pode
      * entrar no painel — sem ele o link do painel não existia para clientes.
      */
-    public record AuthView(String id, String email, String displayName, String phone, boolean owner) {}
+    public record AuthView(
+            String id, String email, String displayName, String phone, boolean owner, List<String> permissions) {}
 
     public record RegisterInput(String email, String displayName, String password, String phone) {}
 
@@ -105,7 +109,7 @@ public class AuthService {
 
         // O registo entra já autenticado — o cliente não repete credenciais.
         openSession(user, request, response);
-        return new AuthView(user.getId().toString(), user.getEmail(), user.getDisplayName(), phone, user.isOwner());
+        return view(user, phone);
     }
 
     /* -------------------------------- Login ------------------------------- */
@@ -152,9 +156,7 @@ public class AuthService {
         userRepository.save(user);
 
         openSession(user, request, response);
-        return new AuthView(
-                user.getId().toString(), user.getEmail(), user.getDisplayName(), phoneOf(user.getId()),
-                user.isOwner());
+        return view(user, phoneOf(user.getId()));
     }
 
     /* ------------------------------- Sessão ------------------------------ */
@@ -163,9 +165,7 @@ public class AuthService {
     public AuthView me(CustomerPrincipal principal) {
         AppUser user = userRepository.findById(principal.id())
                 .orElseThrow(() -> new UnauthorizedException("NOT_AUTHENTICATED", "Sessão inválida. Volte a entrar."));
-        return new AuthView(
-                user.getId().toString(), user.getEmail(), user.getDisplayName(), phoneOf(user.getId()),
-                user.isOwner());
+        return view(user, phoneOf(user.getId()));
     }
 
     /** Termina a sessão: contexto limpo e cookie de sessão invalidado. */
@@ -224,6 +224,12 @@ public class AuthService {
         // Exactamente o repositório configurado na cadeia de segurança: o que é
         // guardado aqui é o que os pedidos seguintes da sessão vão ler.
         securityContextRepository.saveContext(context, request, response);
+    }
+
+    private AuthView view(AppUser user, String phone) {
+        List<String> permissions = ownerGuard.permissionsOf(user).stream().sorted().toList();
+        return new AuthView(
+                user.getId().toString(), user.getEmail(), user.getDisplayName(), phone, user.isOwner(), permissions);
     }
 
     private String phoneOf(UUID userId) {

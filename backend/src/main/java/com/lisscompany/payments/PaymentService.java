@@ -20,6 +20,10 @@ import com.lisscompany.orders.CustomerOrderRepository;
 import com.lisscompany.orders.OrderStatus;
 import com.lisscompany.orders.OrderStatusTransitions;
 import com.lisscompany.shared.error.ConflictException;
+import com.lisscompany.shared.error.InvalidRequestException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import com.lisscompany.shared.error.NotFoundException;
 
 /**
@@ -47,6 +51,7 @@ public class PaymentService {
     private final InventoryService inventoryService;
     private final LoyaltyService loyaltyService;
     private final AuditService auditService;
+    private final JdbcTemplate jdbc;
 
     public PaymentService(
             PaymentRepository paymentRepository,
@@ -54,7 +59,9 @@ public class PaymentService {
             CustomerOrderRepository orderRepository,
             InventoryService inventoryService,
             LoyaltyService loyaltyService,
-            AuditService auditService) {
+            AuditService auditService,
+            JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
         this.paymentRepository = paymentRepository;
         this.eventRepository = eventRepository;
         this.orderRepository = orderRepository;
@@ -72,7 +79,11 @@ public class PaymentService {
             String currency,
             String status,
             String reviewedAt,
-            String reviewNote) {}
+            String reviewNote,
+            String proofReference,
+            String refundedAmount) {}
+
+    public record RefundInput(String amount, String reason, String reference, String idempotencyKey) {}
 
     public record ReviewDecision(
             String orderNumber,
@@ -122,7 +133,8 @@ public class PaymentService {
             String status,
             String createdAt,
             String reviewedAt,
-            String reviewNote) {}
+            String reviewNote,
+            String proofReference) {}
 
     /** Tamanho da fila do painel — mais recentes primeiro, sem carregar tudo. */
     private static final int PANEL_PAGE_SIZE = 200;
@@ -158,7 +170,8 @@ public class PaymentService {
                                 payment.getStatus().name(),
                                 payment.getCreatedAt().toString(),
                                 payment.getReviewedAt() == null ? null : payment.getReviewedAt().toString(),
-                                payment.getReviewNote())))
+                                payment.getReviewNote(),
+                                payment.getProofReference())))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .toList();
@@ -282,6 +295,117 @@ public class PaymentService {
                 "Encomenda cancelada antes da confirmação do pagamento.");
     }
 
+    /* ------------------------ Comprovativo (cliente) ---------------------- */
+
+    /**
+     * O cliente indica a referência do seu pagamento/transferência. Isto NUNCA
+     * marca «pago»: apenas passa o pagamento a UNDER_REVIEW para a loja validar.
+     */
+    @Transactional
+    public PaymentView submitProof(UUID userId, String userLabel, String orderNumber, String reference) {
+        CustomerOrder order = orderRepository.findByOrderNumber(orderNumber)
+                .filter(o -> o.getUserId().equals(userId))
+                .orElseThrow(() -> new NotFoundException("ORDER_NOT_FOUND", "Encomenda não encontrada."));
+        Payment payment = paymentRepository.findByOrderId(order.getId())
+                .orElseThrow(() -> new NotFoundException("PAYMENT_NOT_FOUND", "Pagamento não encontrado."));
+        String ref = blankToNull(reference);
+        if (ref == null || ref.length() < 3 || ref.length() > 200) {
+            throw new InvalidRequestException(java.util.Map.of("reference", "Indique a referência do pagamento (3 a 200 caracteres)."));
+        }
+        if (payment.getStatus() != PaymentStatus.PENDING && payment.getStatus() != PaymentStatus.UNDER_REVIEW) {
+            throw new ConflictException("PAYMENT_CLOSED", "Este pagamento já não aceita comprovativos.");
+        }
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new ConflictException("ORDER_CANCELLED", "A encomenda está cancelada.");
+        }
+        PaymentStatus from = payment.getStatus();
+        payment.setProofReference(ref);
+        payment.setProofSubmittedAt(Instant.now());
+        payment.setStatus(PaymentStatus.UNDER_REVIEW);
+        paymentRepository.save(payment);
+        recordEvent(payment, from, PaymentStatus.UNDER_REVIEW, userId, userLabel,
+                "proof:" + UUID.randomUUID(), "Comprovativo indicado pelo cliente.");
+        auditService.record(userId, userLabel, "payment.proof_submitted", "payment", payment.getId().toString(),
+                "Encomenda " + order.getOrderNumber() + " · referência indicada pelo cliente");
+        return view(payment, order.getOrderNumber());
+    }
+
+    /* ------------------------------ Reembolsos ---------------------------- */
+
+    private String refundedOf(UUID paymentId) {
+        BigDecimal sum = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(amount), 0) FROM refund WHERE payment_id = ?", BigDecimal.class, paymentId);
+        return (sum == null ? BigDecimal.ZERO : sum).setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
+    /**
+     * Reembolso (total ou parcial) de um pagamento CONFIRMADO, por conta
+     * autorizada. Idempotente pela chave, nunca excede o valor pago, regista
+     * quem/quando/porquê e estorna proporcionalmente os pontos ganhos.
+     */
+    @Transactional
+    public PaymentView refund(String orderNumber, RefundInput input, UUID actorUserId, String actorLabel) {
+        CustomerOrder order = orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new NotFoundException("ORDER_NOT_FOUND", "Encomenda não encontrada."));
+        Payment payment = paymentRepository.findByOrderId(order.getId())
+                .orElseThrow(() -> new NotFoundException("PAYMENT_NOT_FOUND", "Pagamento não encontrado."));
+        String key = blankToNull(input.idempotencyKey()) == null
+                ? "refund:" + UUID.randomUUID()
+                : input.idempotencyKey().trim();
+        if (eventRepository.findByPaymentIdAndIdempotencyKey(payment.getId(), key).isPresent()) {
+            return view(payment, order.getOrderNumber());
+        }
+        if (payment.getStatus() != PaymentStatus.PAID && payment.getStatus() != PaymentStatus.PARTIALLY_REFUNDED) {
+            throw new ConflictException("PAYMENT_NOT_REFUNDABLE", "Só pagamentos confirmados podem ser reembolsados.");
+        }
+        java.util.Map<String, String> errors = new java.util.LinkedHashMap<>();
+        BigDecimal amount = null;
+        try {
+            amount = new BigDecimal(String.valueOf(input.amount()).trim()).setScale(2, RoundingMode.HALF_UP);
+            if (amount.signum() <= 0) {
+                errors.put("amount", "O valor do reembolso tem de ser positivo.");
+            }
+        } catch (NumberFormatException ex) {
+            errors.put("amount", "Valor inválido.");
+        }
+        String reason = blankToNull(input.reason());
+        if (reason == null || reason.length() < 3) {
+            errors.put("reason", "Indique o motivo do reembolso.");
+        }
+        BigDecimal alreadyRefunded = new BigDecimal(refundedOf(payment.getId()));
+        BigDecimal remaining = payment.getAmount().subtract(alreadyRefunded);
+        if (amount != null && amount.signum() > 0 && amount.compareTo(remaining) > 0) {
+            errors.put("amount", "O reembolso excede o valor ainda reembolsável (" + remaining.toPlainString() + " Kz).");
+        }
+        if (!errors.isEmpty()) {
+            throw new InvalidRequestException(errors);
+        }
+        jdbc.update("INSERT INTO refund (payment_id, order_id, amount, reason, reference, created_by)"
+                + " VALUES (?, ?, ?, ?, ?, ?)",
+                payment.getId(), order.getId(), amount, reason, blankToNull(input.reference()), actorUserId);
+        PaymentStatus from = payment.getStatus();
+        PaymentStatus to = alreadyRefunded.add(amount).compareTo(payment.getAmount()) >= 0
+                ? PaymentStatus.REFUNDED
+                : PaymentStatus.PARTIALLY_REFUNDED;
+        payment.setStatus(to);
+        paymentRepository.save(payment);
+        recordEvent(payment, from, to, actorUserId, actorLabel, key, reason);
+        loyaltyService.reverseOnRefund(order, amount, payment.getAmount(), actorUserId, actorLabel);
+        auditService.record(actorUserId, actorLabel, "payment.refunded", "payment", payment.getId().toString(),
+                "Encomenda %s · reembolso %s Kz (%s → %s) · %s".formatted(
+                        order.getOrderNumber(), amount.toPlainString(), from, to, reason));
+        return view(payment, order.getOrderNumber());
+    }
+
+    /** Lista de reembolsos de uma encomenda (painel). */
+    @Transactional(readOnly = true)
+    public java.util.List<java.util.Map<String, Object>> refundsOf(String orderNumber) {
+        return jdbc.queryForList(
+                "SELECT r.amount::text AS \"amount\", r.reason AS \"reason\", r.reference AS \"reference\","
+                        + " r.created_at AS \"createdAt\" FROM refund r JOIN customer_order o ON o.id = r.order_id"
+                        + " WHERE o.order_number = ? ORDER BY r.created_at DESC", orderNumber);
+    }
+
     /* ------------------------------ Internos ----------------------------- */
 
     /** Só PENDING/UNDER_REVIEW avança; o resto é conflito com o estado actual. */
@@ -335,7 +459,7 @@ public class PaymentService {
         eventRepository.save(event);
     }
 
-    private static PaymentView view(Payment payment, String orderNumber) {
+    private PaymentView view(Payment payment, String orderNumber) {
         return new PaymentView(
                 orderNumber,
                 payment.getMethod().name(),
@@ -343,7 +467,9 @@ public class PaymentService {
                 payment.getCurrency(),
                 payment.getStatus().name(),
                 payment.getReviewedAt() == null ? null : payment.getReviewedAt().toString(),
-                payment.getReviewNote());
+                payment.getReviewNote(),
+                payment.getProofReference(),
+                refundedOf(payment.getId()));
     }
 
     private static String blankToNull(String value) {

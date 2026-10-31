@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.lisscompany.identity.AppUser;
 import com.lisscompany.inventory.InventoryService;
 import com.lisscompany.shared.security.OwnerGuard;
+import com.lisscompany.shared.security.Permissions;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -44,7 +45,7 @@ public class AdminInventoryController {
 
     @GetMapping
     public List<InventoryService.StockView> list() {
-        ownerGuard.requireOwner(signedInUser().id());
+        ownerGuard.require(signedInUser().id(), Permissions.INVENTORY_MANAGE);
         return inventoryService.listStock();
     }
 
@@ -57,7 +58,7 @@ public class AdminInventoryController {
     @ResponseStatus(HttpStatus.OK)
     public InventoryService.StockView adjust(
             @PathVariable UUID productId, @Valid @RequestBody AdjustmentRequest request) {
-        AppUser actor = ownerGuard.requireOwner(signedInUser().id());
+        AppUser actor = ownerGuard.require(signedInUser().id(), Permissions.INVENTORY_MANAGE);
         return inventoryService.adjustStock(productId, request.delta(), request.note(), actor);
     }
 

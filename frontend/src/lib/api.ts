@@ -9,6 +9,11 @@
 
 const API_TIMEOUT_MS = 8_000;
 
+const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
+
+function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
 /**
  * Sinal de timeout da requisição.
  *
@@ -65,15 +70,15 @@ async function ensureCsrfToken(force = false): Promise<string> {
   if (csrfToken && !force) return csrfToken;
   let response: Response;
   try {
-    response = await fetch('/api/v1/csrf', {
-      credentials: 'same-origin',
+    response = await fetch(apiUrl('/api/v1/csrf'), {
+      credentials: 'include',
       signal: requestTimeout(API_TIMEOUT_MS),
     });
   } catch {
-    throw new ApiError(0, 'NETWORK_ERROR', 'Sem ligação ao servidor. Verifique a sua internet.', '/api/v1/csrf');
+    throw new ApiError(0, 'NETWORK_ERROR', 'Sem ligação ao servidor. Verifique a sua internet.', apiUrl('/api/v1/csrf'));
   }
   if (!response.ok) {
-    throw new ApiError(response.status, 'CSRF_UNAVAILABLE', 'Não foi possível obter o token de segurança.', '/api/v1/csrf');
+    throw new ApiError(response.status, 'CSRF_UNAVAILABLE', 'Não foi possível obter o token de segurança.', apiUrl('/api/v1/csrf'));
   }
   csrfToken = ((await response.json()) as { token: string }).token;
   return csrfToken;
@@ -95,14 +100,14 @@ async function apiFetchInternal<T>(path: string, init: RequestInit, isRetry: boo
 
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await fetch(apiUrl(path), {
       ...init,
       headers: {
         Accept: 'application/json',
         ...(needsCsrf && csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
         ...init.headers,
       },
-      credentials: 'same-origin',
+      credentials: 'include',
       signal: init.signal ?? requestTimeout(API_TIMEOUT_MS),
     });
   } catch (cause) {
@@ -110,9 +115,9 @@ async function apiFetchInternal<T>(path: string, init: RequestInit, isRetry: boo
     // re-passa intacto, para não perder o status/code originais.
     if (cause instanceof ApiError) throw cause;
     if (cause instanceof DOMException && cause.name === 'TimeoutError') {
-      throw new ApiError(0, 'NETWORK_TIMEOUT', 'O servidor demorou a responder. Tente novamente.', path);
+      throw new ApiError(0, 'NETWORK_TIMEOUT', 'O servidor demorou a responder. Tente novamente.', apiUrl(path));
     }
-    throw new ApiError(0, 'NETWORK_ERROR', 'Sem ligação ao servidor. Verifique a sua internet.', path);
+    throw new ApiError(0, 'NETWORK_ERROR', 'Sem ligação ao servidor. Verifique a sua internet.', apiUrl(path));
   }
 
   if (response.ok) {
@@ -142,7 +147,7 @@ async function apiFetchInternal<T>(path: string, init: RequestInit, isRetry: boo
     response.status,
     body.code ?? 'HTTP_ERROR',
     body.message ?? 'O pedido não pôde ser processado.',
-    body.path ?? path,
+    body.path ?? apiUrl(path),
     body.fieldErrors ?? {},
     body.issues ?? [],
   );

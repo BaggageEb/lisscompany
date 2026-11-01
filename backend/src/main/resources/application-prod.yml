@@ -2,11 +2,14 @@
 app:
   docs:
     public: false
+
 server:
   servlet:
     session:
       cookie:
         secure: true
+        same-site: none
+
 springdoc:
   api-docs:
     enabled: false

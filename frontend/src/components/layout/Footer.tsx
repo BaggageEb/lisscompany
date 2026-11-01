@@ -48,6 +48,9 @@ export function Footer() {
 
       <div className="lc-container lc-footer__bottom">
         <p>© {new Date().getFullYear()} LISSCOMPANY. Todos os direitos reservados.</p>
+        <p className="lc-footer__developer">
+          Desenvolvido por <strong>DANEXKA SYSTEM</strong>
+          </p>
         {hasContacts ? (
           <p className="lc-footer__muted">
             {[contacts.phone, contacts.email, contacts.address].filter(Boolean).join(' · ')}

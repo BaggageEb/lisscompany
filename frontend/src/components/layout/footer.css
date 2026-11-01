@@ -86,3 +86,15 @@
 .lc-footer__muted {
   font-style: italic;
 }
+
+.lc-footer__developer {
+  font-size: var(--lc-text-xs);
+  color: rgb(255 253 248 / 65%);
+  letter-spacing: 0.04em;
+}
+
+.lc-footer__developer strong {
+  color: var(--lc-gold-300);
+  font-weight: var(--lc-weight-bold);
+  letter-spacing: 0.08em;
+}

@@ -145,6 +145,11 @@ export function AdminOrderDetailPage() {
                   {item.summary.length > 0 && (
                     <span className="lc-admin__row-meta">{item.summary.join(' · ')}</span>
                   )}
+                  {(item.dedications ?? []).map((dedication, i) => (
+                    <span key={i} className="lc-admin__dedication" data-testid="dedication">
+                      <strong>Mensagem — {dedication.addon}:</strong> «{dedication.message}»
+                    </span>
+                  ))}
                 </span>
                 <span className="lc-admin__amount">{formatKz(item.lineTotal)}</span>
               </div>

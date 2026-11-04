@@ -125,18 +125,40 @@ export function CheckoutPage() {
     setContactPhone((current) => current || session.user.phone || '');
   }, [session]);
 
+  // Identifica a zona: se o município/cidade escritos coincidem com uma zona, ou
+  // só existe uma zona com preço, escolhe-a (o cliente pode sempre mudar).
+  useEffect(() => {
+    if (fulfillment !== 'DELIVERY' || zoneId) return;
+    const priced = (store?.deliveryZones ?? []).filter((zone) => zone.priced !== false && zone.fee !== null);
+    if (priced.length === 0 || (store?.delivery?.mode && store.delivery.mode !== 'ZONES')) return;
+    const normalise = (value: string) =>
+      value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+    const typed = [addressMunicipality, addressCity].map(normalise).filter(Boolean);
+    const match = priced.find((zone) => typed.includes(normalise(zone.name)));
+    if (match) setZoneId(match.id);
+    else if (priced.length === 1) setZoneId(priced[0].id);
+  }, [fulfillment, zoneId, store, addressMunicipality, addressCity]);
+
   // Revalida o carrinho no servidor (a mesma autoridade do carrinho).
   useEffect(() => {
     if (cart.lines.length === 0) return;
     const controller = new AbortController();
     setQuoteFailed(false);
-    postCartQuote(buildQuoteRequest(cart), controller.signal)
+    // Com entrega ao domicílio, o servidor calcula também o preço da entrega
+    // (zona escolhida / preço fixo / gratuita) — nunca o navegador.
+    postCartQuote(
+      {
+        ...buildQuoteRequest(cart),
+        ...(fulfillment === 'DELIVERY' ? { fulfillment, ...(zoneId ? { deliveryZoneId: zoneId } : {}) } : {}),
+      },
+      controller.signal,
+    )
       .then((result) => setQuote(result))
       .catch(() => {
         if (!controller.signal.aborted) setQuoteFailed(true);
       });
     return () => controller.abort();
-  }, [cart]);
+  }, [cart, fulfillment, zoneId]);
 
   // Resumo de fidelização do cliente (privado; opcional no checkout).
   useEffect(() => {
@@ -248,21 +270,23 @@ export function CheckoutPage() {
     }
   }
 
-  const zones = store?.deliveryZones ?? [];
+  const zones = (store?.deliveryZones ?? []).filter((zone) => zone.priced !== false && zone.fee !== null);
   const selectedZone = zones.find((zone) => zone.id === zoneId) ?? null;
   const termsRequired = store?.settings.termsRequired === true;
-  const zoneMissing = fulfillment === 'DELIVERY' && zones.length > 0 && !selectedZone;
+  // Preço fixo / gratuita: sem escolha de zona. Por zonas (ou configuração antiga com zonas): zona obrigatória.
+  const deliveryMode = store?.delivery?.mode ?? (zones.length > 0 ? 'ZONES' : null);
+  const needsZone = deliveryMode === 'ZONES';
+  // Entrega calculada pelo servidor para esta zona/carrinho (nulo = ainda a calcular ou levantamento).
+  const deliveryQuote = fulfillment === 'DELIVERY' ? (quote?.delivery ?? null) : null;
+  const deliveryOk = fulfillment !== 'DELIVERY' || deliveryQuote?.available === true;
+  const deliveryFee = deliveryOk && deliveryQuote?.fee != null ? Number.parseFloat(deliveryQuote.fee) : null;
+  const deliveryIssue = fulfillment === 'DELIVERY' && deliveryQuote && !deliveryQuote.available ? deliveryQuote.issue : null;
   const canSubmit =
     quote?.valid === true &&
     paymentMethod !== null &&
     !submitting &&
-    !zoneMissing &&
+    deliveryOk &&
     (!termsRequired || termsAccepted);
-  const estimatedFee = (() => {
-    if (fulfillment !== 'DELIVERY' || !selectedZone) return null;
-    const freeOver = selectedZone.freeOver ? Number.parseFloat(selectedZone.freeOver) : null;
-    return freeOver !== null && Number.parseFloat(cartTotal(cart)) >= freeOver ? 0 : Number.parseFloat(selectedZone.fee);
-  })();
   const localTotal = cartTotal(cart);
   // `cartTotal` devolve string decimal (convenção monetária) — para a
   // estimativa de desconto converte-se uma única vez para número.
@@ -401,15 +425,23 @@ export function CheckoutPage() {
                     <span className="lc-checkout__choice-name">{FULFILLMENT_LABELS[option]}</span>
                     {option === 'DELIVERY' && (
                       <span className="lc-checkout__choice-note">
-                        {zones.length > 0
-                          ? 'Escolha a zona de entrega; a tarifa é calculada pelo servidor.'
-                          : 'Pedimos a morada e combinamos a entrega consigo — sem custo calculado aqui.'}
+                        {store?.delivery && !store.delivery.available
+                          ? 'Entrega ao domicílio indisponível de momento — escolha levantamento.'
+                          : needsZone
+                            ? 'Escolha a zona de entrega; o custo é calculado e mostrado antes de confirmar.'
+                            : 'O custo da entrega é calculado e mostrado antes de confirmar.'}
                       </span>
                     )}
                   </span>
                 </label>
               ))}
             </div>
+
+            {fulfillment === 'DELIVERY' && deliveryIssue && (
+              <p className="lc-checkout__field-error" role="alert" data-testid="delivery-issue">
+                {deliveryIssue}
+              </p>
+            )}
 
             {fulfillment === 'PICKUP' && store && (
               <div className="lc-checkout__field">
@@ -435,7 +467,7 @@ export function CheckoutPage() {
               </div>
             )}
 
-            {fulfillment === 'DELIVERY' && zones.length > 0 && (
+            {fulfillment === 'DELIVERY' && needsZone && zones.length > 0 && (
               <div className="lc-checkout__field">
                 <label htmlFor="checkout-zone">Zona de entrega</label>
                 <select
@@ -447,7 +479,7 @@ export function CheckoutPage() {
                   <option value="">Escolha a zona…</option>
                   {zones.map((zone) => (
                     <option key={zone.id} value={zone.id}>
-                      {zone.name} — {formatKz(zone.fee)}
+                      {zone.name} — {zone.freeDelivery || zone.fee === '0.00' ? 'Grátis' : formatKz(zone.fee ?? '0')}
                     </option>
                   ))}
                 </select>
@@ -733,10 +765,18 @@ export function CheckoutPage() {
               <dt>Total estimado ({cartQuantity(cart)} artigos)</dt>
               <dd>{formatKz(localTotal)}</dd>
             </div>
-            {estimatedFee !== null && (
-              <div className="lc-checkout__total-row">
-                <dt>Entrega ({selectedZone?.name})</dt>
-                <dd>{estimatedFee === 0 ? 'Grátis' : formatKz(estimatedFee)}</dd>
+            {fulfillment === 'DELIVERY' && (
+              <div className="lc-checkout__total-row" data-testid="delivery-row">
+                <dt>Entrega ao domicílio{deliveryQuote?.zoneName ? ` (${deliveryQuote.zoneName})` : ''}</dt>
+                <dd>
+                  {deliveryFee === null
+                    ? deliveryIssue
+                      ? 'por definir'
+                      : 'a calcular…'
+                    : deliveryFee === 0
+                      ? 'Grátis'
+                      : formatKz(deliveryFee)}
+                </dd>
               </div>
             )}
             {estimatedDiscount > 0 && (
@@ -750,7 +790,7 @@ export function CheckoutPage() {
                 Total confirmado pelo servidor
                 {estimatedDiscount > 0 ? ' (antes do desconto)' : ''}
               </dt>
-              <dd>{quote ? formatKz(quote.total) : '—'}</dd>
+              <dd>{quote ? formatKz(quote.grandTotal ?? quote.total) : '—'}</dd>
             </div>
           </dl>
 
@@ -811,7 +851,7 @@ function Confirmation({ order }: { order: OrderView }) {
           </div>
           <div className="lc-checkout__total-row">
             <dt>Entrega</dt>
-            <dd>{order.deliveryFee === '0.00' ? (order.deliveryZone ? 'Grátis' : 'A combinar com a loja') : formatKz(order.deliveryFee)}</dd>
+            <dd>{order.fulfillment === 'PICKUP' ? '—' : order.deliveryFee === '0.00' ? 'Grátis' : formatKz(order.deliveryFee)}</dd>
           </div>
           {order.discountAmount !== '0.00' && (
             <div className="lc-checkout__total-row">

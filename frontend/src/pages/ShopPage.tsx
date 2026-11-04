@@ -188,8 +188,8 @@ export function ShopPage() {
                           <Badge tone="warning">Esgotado</Badge>
                         )}
                       </div>
-                      <Link className="shop__link" to={`/loja/${product.slug}`}>
-                        Ver detalhe
+                      <Link className="shop__link" to={product.customizable ? '/cake-studio' : `/loja/${product.slug}`}>
+                        {product.customizable ? 'Personalizar no Cake Studio' : 'Ver detalhe'}
                         <span aria-hidden="true"> →</span>
                       </Link>
                     </div>

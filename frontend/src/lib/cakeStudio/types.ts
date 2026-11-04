@@ -8,7 +8,7 @@
  * confirmados pelo servidor antes de a criação entrar no carrinho.
  */
 
-export type IngredientKind = 'CAKE_BASE' | 'FILLING' | 'EXTRA';
+export type IngredientKind = 'CAKE_BASE' | 'FILLING' | 'EXTRA' | 'ADDON';
 
 export interface IngredientOption {
   id: string;
@@ -20,6 +20,8 @@ export interface IngredientOption {
   imageUrl?: string | null;
   available: boolean;
   displayOrder: number;
+  /** Complemento que admite mensagem/dedicatória (ex.: cartão). */
+  allowsMessage?: boolean;
 }
 
 /** Regras fixas do configurador, servidas pelo backend para o cliente exibir. */
@@ -47,6 +49,8 @@ export interface CakeStudioOptions {
   cakeBases: IngredientOption[];
   fillings: IngredientOption[];
   extras: IngredientOption[];
+  /** Complementos (velas, cartões…): independentes do limite de extras. Ausente em servidores antigos. */
+  addons?: IngredientOption[];
 }
 
 /** Sequência fixa de passos do Studio (1→6). */
@@ -58,6 +62,10 @@ export interface CakeComposition {
   secondFillingId: string | null;
   extraIds: string[];
   moist: boolean;
+  /** Complementos escolhidos (fora do limite de extras). */
+  addonIds?: string[];
+  /** Mensagem/dedicatória por complemento (só para os que a admitem). */
+  addonMessages?: Record<string, string>;
 }
 
 /** Linha do desglose de preço devolvido pelo servidor (ou estimado no cliente). */

@@ -38,6 +38,7 @@ const BY_KIND: Record<IngredientKind, IngredientVisual> = {
   CAKE_BASE: { fill: '#d9b98c', accent: '#c2a173', texture: 'crumb' },
   FILLING: { fill: '#f0e4cf', accent: '#dccbae', texture: 'smooth' },
   EXTRA: { fill: '#d4af37', accent: '#b8952a', texture: 'smooth' },
+  ADDON: { fill: '#fffdf8', accent: '#e6cf86', texture: 'smooth' },
 };
 
 /** Aparência da camada para um ingrediente (ou fallback por tipo). */

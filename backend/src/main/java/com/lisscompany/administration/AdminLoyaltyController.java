@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,6 +47,9 @@ public class AdminLoyaltyController {
     public record AdjustmentRequest(
             @NotNull(message = "Indique os pontos a ajustar (positivo ou negativo).") Integer points,
             @Size(max = 200, message = "Nota demasiado longa.") String note) {}
+
+    /** Prazo de validade dos pontos em dias; {@code null} = sem prazo. */
+    public record ValidityRequest(Integer days) {}
 
     private final LoyaltyService loyaltyService;
     private final DiscountService discountService;
@@ -98,6 +102,27 @@ public class AdminLoyaltyController {
     public DiscountService.RuleView upsertDiscount(@Valid @RequestBody DiscountService.RuleInput input) {
         AppUser actor = ownerGuard.require(principal().id(), Permissions.LOYALTY_MANAGE);
         return discountService.configure(input, actor);
+    }
+
+    /** Validade global dos pontos: prazo em vigor, atalhos e totais. */
+    @GetMapping("/validity")
+    public LoyaltyService.ValidityView validity() {
+        ownerGuard.require(principal().id(), Permissions.LOYALTY_MANAGE);
+        return loyaltyService.validity();
+    }
+
+    /** Efeito de um prazo sobre os pontos existentes, sem alterar nada. */
+    @GetMapping("/validity/preview")
+    public LoyaltyService.ValidityPreview previewValidity(@RequestParam(required = false) Integer days) {
+        ownerGuard.require(principal().id(), Permissions.LOYALTY_MANAGE);
+        return loyaltyService.previewValidity(days);
+    }
+
+    /** Define o prazo (aplicado também aos pontos já existentes). */
+    @PutMapping("/validity")
+    public LoyaltyService.ValidityView setValidity(@RequestBody ValidityRequest request) {
+        AppUser actor = ownerGuard.require(principal().id(), Permissions.LOYALTY_MANAGE);
+        return loyaltyService.setValidity(request.days(), actor);
     }
 
     /** Contas de fidelização e saldos — leitura do painel. */

@@ -52,6 +52,10 @@ public class Ingredient {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
+    /** Complemento que admite mensagem/dedicatória do cliente (ex.: cartão). */
+    @Column(name = "allows_message", nullable = false)
+    private boolean allowsMessage;
+
     /** {@code null} = stock não controlado; {@code 0} = esgotado. */
     @Column(name = "stock_qty")
     private Integer stockQty;
@@ -107,6 +111,14 @@ public class Ingredient {
 
     public String getImageUrl() {
         return imageUrl;
+    }
+
+    public boolean isAllowsMessage() {
+        return allowsMessage;
+    }
+
+    public void setAllowsMessage(boolean allowsMessage) {
+        this.allowsMessage = allowsMessage;
     }
 
     public Integer getStockQty() {

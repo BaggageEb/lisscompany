@@ -61,6 +61,10 @@ cd frontend && npm test
 cd frontend && npm run build
 ```
 
+## Melhorias V8
+
+Validade dos pontos, entregas configuráveis, complementos do Cake Studio e imagens responsivas: ver [`docs/melhorias-v8.md`](docs/melhorias-v8.md).
+
 ## Arquitetura e módulos
 
 Ver [docs/architecture.md](docs/architecture.md). Monólito modular Spring Boot; cada domínio (`identity`, `catalog`, `cakebuilder`, `inventory`, `orders`, `payments`, `delivery`, `loyalty`, `promotions`, `notifications`, `administration`, `audit`) vive no seu pacote. O backend é sempre autoritativo: preços, stock, descontos e pontos são calculados e validados no servidor.

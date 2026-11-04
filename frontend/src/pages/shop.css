@@ -253,3 +253,87 @@
   font-size: var(--lc-text-xs);
   color: var(--lc-ink-faint);
 }
+
+/* ---------- Telemóvel: cartões compactos (imagem à esquerda, dados à direita) ----------
+ * Em ecrãs pequenos a imagem em 4:3 ocupava a largura toda e empurrava o conteúdo
+ * para fora do ecrã. Aqui a imagem fica numa miniatura quadrada; `object-fit: cover`
+ * mantém a proporção original (corta, nunca estica). O computador não é afectado. */
+@media (max-width: 33.99rem) {
+  .shop__grid {
+    gap: var(--lc-space-3);
+    margin: var(--lc-space-6) 0;
+  }
+
+  .shop__card {
+    height: auto;
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    align-items: start;
+    column-gap: var(--lc-space-3);
+    padding: var(--lc-space-3);
+  }
+
+  .shop__thumb {
+    width: 6.5rem;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--lc-radius-md);
+    overflow: hidden;
+  }
+
+  .shop__thumb img {
+    display: block;
+  }
+
+  .shop__thumb-letter {
+    font-size: var(--lc-text-h1);
+  }
+
+  .shop__body {
+    min-width: 0;
+    gap: var(--lc-space-1);
+  }
+
+  .shop__name {
+    font-size: var(--lc-text-body);
+    line-height: 1.25;
+  }
+
+  /* Descrição curta: no máximo duas linhas. */
+  .shop__desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    flex: none;
+  }
+
+  .shop__foot {
+    flex-wrap: wrap;
+    gap: var(--lc-space-2);
+    margin-top: var(--lc-space-1);
+  }
+
+  .shop__price {
+    font-size: var(--lc-text-body-lg);
+  }
+
+  .shop__link {
+    margin-top: var(--lc-space-1);
+  }
+
+  /* Detalhe: a imagem deixa de ocupar quase o ecrã todo. */
+  .shop__detail {
+    gap: var(--lc-space-5);
+  }
+
+  .shop__detail-thumb {
+    width: 100%;
+    max-width: 18rem;
+    margin-inline: auto;
+    aspect-ratio: 1 / 1;
+  }
+
+  .shop__detail-thumb img {
+    display: block;
+  }
+}

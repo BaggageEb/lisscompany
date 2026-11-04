@@ -31,7 +31,9 @@ public class CatalogController {
             String categoryName,
             boolean available,
             List<String> gallery,
-            Integer stockQty) {}
+            Integer stockQty,
+            /** Bolo personalizado: só pode ser comprado através do Cake Studio. */
+            boolean customizable) {}
 
     private final CatalogService service;
     private final CatalogAdminService adminService;
@@ -82,6 +84,7 @@ public class CatalogController {
                 product.getCategory().getName(),
                 product.getStatus() == ProductStatus.ACTIVE && (free == null || free > 0),
                 adminService.galleryOf(product.getId()),
-                free == null ? null : Math.max(free, 0));
+                free == null ? null : Math.max(free, 0),
+                product.isCakeStudioBase());
     }
 }

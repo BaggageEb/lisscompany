@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.lisscompany.audit.AuditService;
+import com.lisscompany.cakebuilder.AddonChoice;
+import com.lisscompany.cakebuilder.CakeStudioService;
 import com.lisscompany.cartquote.CartQuoteService;
 import com.lisscompany.catalog.Ingredient;
 import com.lisscompany.catalog.IngredientRepository;
@@ -96,7 +98,15 @@ public class OrderService {
             String secondFillingId,
             List<String> extraIds,
             boolean moist,
-            int quantity) {}
+            int quantity,
+            List<AddonChoice> addons) {
+
+        public CakeLine(
+                String cakeBaseId, String firstFillingId, String secondFillingId, List<String> extraIds,
+                boolean moist, int quantity) {
+            this(cakeBaseId, firstFillingId, secondFillingId, extraIds, moist, quantity, List.of());
+        }
+    }
 
     public record CreateInput(
             String contactName,
@@ -121,8 +131,12 @@ public class OrderService {
             /** Aceitação das condições (obrigatória quando a loja publicou termos). */
             Boolean termsAccepted) {}
 
+    /** Mensagem/dedicatória escrita pelo cliente num complemento (ex.: cartão). */
+    public record DedicationView(String addon, String message) {}
+
     public record ItemView(
-            String kind, String name, String unitPrice, int quantity, String lineTotal, List<String> summary) {}
+            String kind, String name, String unitPrice, int quantity, String lineTotal, List<String> summary,
+            List<DedicationView> dedications) {}
 
     public record OrderView(
             String number,
@@ -207,19 +221,27 @@ public class OrderService {
             order.addItem(productItem(line, quote.lines().get(cursor++)));
         }
         for (CakeLine line : cakeLines) {
-            order.addItem(cakeItem(line, quote.lines().get(cursor++)));
+            OrderItem cakeItem = cakeItem(line, quote.lines().get(cursor++));
+            order.addItem(cakeItem);
+            if (hasDedication(line)) {
+                order.setHasDedication(true);
+            }
         }
 
         BigDecimal total = new BigDecimal(quote.total());
         order.setSubtotal(total);
 
-        // 3a. Entrega: a tarifa vem SEMPRE da zona configurada no servidor.
+        // 3a. Entrega: o preço vem SEMPRE da configuração do servidor (mesmo cálculo
+        //     que o checkout mostrou). Sem preço configurado, a entrega não se confirma.
         if (input.fulfillment() == OrderFulfillment.DELIVERY) {
-            DeliveryService.Zone zone = deliveryService.resolveForOrder(input.deliveryZoneId());
-            if (zone != null) {
-                order.setDeliveryZoneId(UUID.fromString(zone.id()));
-                order.setDeliveryZoneName(zone.name());
-                order.setDeliveryFee(deliveryService.feeFor(zone, total));
+            DeliveryService.Quote delivery = deliveryService.quote(input.deliveryZoneId(), total);
+            if (!delivery.available()) {
+                throw new InvalidRequestException(Map.of(delivery.field(), delivery.issue()));
+            }
+            order.setDeliveryFee(delivery.fee());
+            if (delivery.zoneId() != null) {
+                order.setDeliveryZoneId(UUID.fromString(delivery.zoneId()));
+                order.setDeliveryZoneName(delivery.zoneName());
             }
         }
 
@@ -310,7 +332,8 @@ public class OrderService {
             int itemCount,
             String contactName,
             String fulfillment,
-            String paymentMethod) {}
+            String paymentMethod,
+            boolean hasDedication) {}
 
     /** Detalhe do painel: a mesma visão do cliente + transições que a máquina aceita. */
     public record AdminOrderDetailView(OrderView order, List<String> allowedTargets) {}
@@ -341,7 +364,8 @@ public class OrderService {
                         order.getItems().size(),
                         order.getContactName(),
                         order.getFulfillment().name(),
-                        order.getPaymentMethod().name()))
+                        order.getPaymentMethod().name(),
+                        order.isHasDedication()))
                 .toList();
     }
 
@@ -494,6 +518,13 @@ public class OrderService {
                 ? List.of()
                 : line.extraIds().stream().map(this::requireIngredient).toList();
 
+        List<SnapshotAddon> addons = new ArrayList<>();
+        for (AddonChoice choice : line.addons() == null ? List.<AddonChoice>of() : line.addons()) {
+            Ingredient addon = requireIngredient(choice.id());
+            String message = addon.isAllowsMessage() ? CakeStudioService.cleanMessage(choice.message()) : null;
+            addons.add(new SnapshotAddon(addon.getId().toString(), addon.getName(), message));
+        }
+
         CakeCompositionSnapshot snapshot = new CakeCompositionSnapshot(
                 new SnapshotIngredient(cakeBase.getId().toString(), cakeBase.getName()),
                 List.of(
@@ -502,8 +533,9 @@ public class OrderService {
                 extras.stream()
                         .map(extra -> new SnapshotIngredient(extra.getId().toString(), extra.getName()))
                         .toList(),
-                labels(cakeBase, firstFilling, secondFilling, extras, line.moist()),
-                line.moist());
+                labels(cakeBase, firstFilling, secondFilling, extras, line.moist(), addons),
+                line.moist(),
+                addons);
 
         OrderItem item = new OrderItem();
         item.setKind(OrderItemKind.CAKE);
@@ -517,7 +549,8 @@ public class OrderService {
 
     /** Rótulos legíveis gerados no SERVIDOR (o cliente não escreve texto da encomenda). */
     private static List<String> labels(
-            Ingredient cakeBase, Ingredient first, Ingredient second, List<Ingredient> extras, boolean moist) {
+            Ingredient cakeBase, Ingredient first, Ingredient second, List<Ingredient> extras, boolean moist,
+            List<SnapshotAddon> addons) {
         List<String> labels = new ArrayList<>();
         labels.add("Massa " + cakeBase.getName());
         labels.add("1º recheio: " + first.getName());
@@ -526,6 +559,10 @@ public class OrderService {
             labels.add("Extra: " + extra.getName());
         }
         labels.add(moist ? "Bolo molhado" : "Bolo não molhado");
+        for (SnapshotAddon addon : addons) {
+            labels.add("Complemento: " + addon.name()
+                    + (addon.message() == null ? "" : " — mensagem: «" + addon.message() + "»"));
+        }
         return labels;
     }
 
@@ -544,6 +581,11 @@ public class OrderService {
                         .toList();
     }
 
+    private static boolean hasDedication(CakeLine line) {
+        return line.addons() != null && line.addons().stream()
+                .anyMatch(choice -> CakeStudioService.cleanMessage(choice.message()) != null);
+    }
+
     private List<CartQuoteService.CakeLineInput> toCakeLines(List<CakeLine> lines) {
         return lines == null
                 ? List.of()
@@ -554,7 +596,8 @@ public class OrderService {
                                 line.secondFillingId(),
                                 line.extraIds(),
                                 line.moist(),
-                                line.quantity()))
+                                line.quantity(),
+                                line.addons()))
                         .toList();
     }
 
@@ -636,10 +679,29 @@ public class OrderService {
                 money(item.getLineTotal()),
                 item.getComposition() == null
                         ? List.of()
-                        : objectMapper.readValue(item.getComposition(), CakeCompositionSnapshot.class).labels());
+                        : objectMapper.readValue(item.getComposition(), CakeCompositionSnapshot.class).labels(),
+                dedications(item));
+    }
+
+    /** Mensagens/dedicatórias de um item (vazio para produtos e bolos antigos sem complementos). */
+    private List<DedicationView> dedications(OrderItem item) {
+        if (item.getComposition() == null) {
+            return List.of();
+        }
+        CakeCompositionSnapshot snapshot = objectMapper.readValue(item.getComposition(), CakeCompositionSnapshot.class);
+        if (snapshot.addons() == null) {
+            return List.of();
+        }
+        return snapshot.addons().stream()
+                .filter(addon -> addon.message() != null && !addon.message().isBlank())
+                .map(addon -> new DedicationView(addon.name(), addon.message()))
+                .toList();
     }
 
     /* --------------------------- Snapshot (JSON) -------------------------- */
+
+    /** Complemento escolhido, com a mensagem do cliente (se houver). */
+    public record SnapshotAddon(String id, String name, String message) {}
 
     public record SnapshotIngredient(String id, String name) {}
 
@@ -648,5 +710,7 @@ public class OrderService {
             List<SnapshotIngredient> fillings,
             List<SnapshotIngredient> extras,
             List<String> labels,
-            boolean moist) {}
+            boolean moist,
+            /** Ausente em encomendas anteriores aos complementos. */
+            List<SnapshotAddon> addons) {}
 }

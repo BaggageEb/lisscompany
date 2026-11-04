@@ -36,7 +36,14 @@ export function findOption(
   id: string | null,
 ): IngredientOption | null {
   if (!id) return null;
-  const group = kind === 'CAKE_BASE' ? options.cakeBases : kind === 'FILLING' ? options.fillings : options.extras;
+  const group =
+    kind === 'CAKE_BASE'
+      ? options.cakeBases
+      : kind === 'FILLING'
+        ? options.fillings
+        : kind === 'ADDON'
+          ? (options.addons ?? [])
+          : options.extras;
   return group.find((option) => option.id === id) ?? null;
 }
 
@@ -61,6 +68,8 @@ export function estimateComposition(composition: CakeComposition, options: CakeS
     { kind: 'FILLING', id: composition.firstFillingId },
     { kind: 'FILLING', id: composition.secondFillingId },
     ...composition.extraIds.map((id) => ({ kind: 'EXTRA' as const, id })),
+    // Complementos: somam ao preço mas não contam para o limite de extras.
+    ...(composition.addonIds ?? []).map((id) => ({ kind: 'ADDON' as const, id })),
   ];
 
   for (const { kind, id } of selections) {

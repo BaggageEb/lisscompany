@@ -9,7 +9,9 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lisscompany.cakebuilder.AddonChoice;
 import com.lisscompany.cakebuilder.CakeStudioService;
+import com.lisscompany.delivery.DeliveryService;
 import com.lisscompany.catalog.Product;
 import com.lisscompany.catalog.ProductRepository;
 import com.lisscompany.catalog.ProductStatus;
@@ -42,12 +44,15 @@ public class CartQuoteService {
     private final ProductRepository productRepository;
     private final CakeStudioService cakeStudioService;
     private final InventoryService inventoryService;
+    private final DeliveryService deliveryService;
 
     public CartQuoteService(
-            ProductRepository productRepository, CakeStudioService cakeStudioService, InventoryService inventoryService) {
+            ProductRepository productRepository, CakeStudioService cakeStudioService,
+            InventoryService inventoryService, DeliveryService deliveryService) {
         this.productRepository = productRepository;
         this.cakeStudioService = cakeStudioService;
         this.inventoryService = inventoryService;
+        this.deliveryService = deliveryService;
     }
 
     /* ------------------------------- Views ------------------------------- */
@@ -60,9 +65,32 @@ public class CartQuoteService {
             String secondFillingId,
             List<String> extraIds,
             boolean moist,
-            int quantity) {}
+            int quantity,
+            List<AddonChoice> addons) {
 
-    public record CartInput(List<ProductLineInput> productLines, List<CakeLineInput> cakeLines) {}
+        public CakeLineInput(
+                String cakeBaseId, String firstFillingId, String secondFillingId, List<String> extraIds,
+                boolean moist, int quantity) {
+            this(cakeBaseId, firstFillingId, secondFillingId, extraIds, moist, quantity, List.of());
+        }
+    }
+
+    /**
+     * Carrinho a orçamentar. {@code delivery} é opcional: quando o cliente escolhe
+     * entrega ao domicílio, o servidor calcula também o preço da entrega.
+     */
+    public record CartInput(
+            List<ProductLineInput> productLines, List<CakeLineInput> cakeLines, boolean delivery,
+            String deliveryZoneId) {
+
+        public CartInput(List<ProductLineInput> productLines, List<CakeLineInput> cakeLines) {
+            this(productLines, cakeLines, false, null);
+        }
+    }
+
+    /** Entrega no orçamento: preço (ou o motivo por que não pode ser confirmada). */
+    public record DeliveryView(
+            boolean available, String fee, boolean free, String zoneId, String zoneName, String issue, String field) {}
 
     public record LineView(
             String kind,
@@ -73,7 +101,13 @@ public class CartQuoteService {
             boolean valid,
             List<String> issues) {}
 
-    public record TotalView(boolean valid, String total, String currency, List<LineView> lines, List<String> issues) {}
+    /**
+     * {@code total} = artigos; {@code grandTotal} = artigos + entrega (quando
+     * pedida e disponível). {@code delivery} é nulo se não foi pedida entrega.
+     */
+    public record TotalView(
+            boolean valid, String total, String currency, List<LineView> lines, List<String> issues,
+            DeliveryView delivery, String grandTotal) {}
 
     /* ---------------------------- Revalidação ---------------------------- */
 
@@ -124,7 +158,7 @@ public class CartQuoteService {
             int quantity = Math.max(1, line.quantity());
             CakeStudioService.QuoteView cake = cakeStudioService.quote(new CakeStudioService.QuoteInput(
                     line.cakeBaseId(), line.firstFillingId(), line.secondFillingId(),
-                    line.extraIds(), line.moist()));
+                    line.extraIds(), line.moist(), line.addons()));
 
             List<String> issues = cake.valid() ? List.of() : cake.issues();
             BigDecimal unit = new BigDecimal(cake.total());
@@ -139,7 +173,20 @@ public class CartQuoteService {
         }
 
         boolean valid = cartIssues.isEmpty() && lines.stream().allMatch(LineView::valid);
-        return new TotalView(valid, money(total), "AOA", List.copyOf(lines), List.copyOf(cartIssues));
+
+        DeliveryView deliveryView = null;
+        BigDecimal grand = total;
+        if (input.delivery()) {
+            DeliveryService.Quote dq = deliveryService.quote(input.deliveryZoneId(), total);
+            deliveryView = new DeliveryView(
+                    dq.available(), dq.fee() == null ? null : money(dq.fee()), dq.free(), dq.zoneId(), dq.zoneName(),
+                    dq.issue(), dq.field());
+            if (dq.available()) {
+                grand = total.add(dq.fee());
+            }
+        }
+        return new TotalView(valid, money(total), "AOA", List.copyOf(lines), List.copyOf(cartIssues),
+                deliveryView, money(grand));
     }
 
     private Product resolveProduct(String rawId, List<String> issues) {
@@ -157,6 +204,11 @@ public class CartQuoteService {
         Product product = productRepository.findById(id).orElse(null);
         if (product == null || product.getStatus() != ProductStatus.ACTIVE) {
             issues.add("Produto: já não está disponível.");
+            return null;
+        }
+        if (product.isCakeStudioBase()) {
+            // Bolo personalizado: nunca entra no carrinho sem passar pela configuração.
+            issues.add("Este bolo é personalizado: monte-o no Cake Studio antes de o adicionar ao carrinho.");
             return null;
         }
         return product;

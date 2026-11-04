@@ -18,4 +18,9 @@ public interface LoyaltyAccountRepository extends JpaRepository<LoyaltyAccount, 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM LoyaltyAccount a WHERE a.userId = :userId")
     Optional<LoyaltyAccount> findByUserIdForUpdate(@Param("userId") UUID userId);
+
+    /** Mesmo bloqueio, a partir do id da conta (varrimento de expiração). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM LoyaltyAccount a WHERE a.id = :id")
+    Optional<LoyaltyAccount> findByIdForUpdate(@Param("id") UUID id);
 }

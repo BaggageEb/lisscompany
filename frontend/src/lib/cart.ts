@@ -12,7 +12,7 @@
  *    do preço estimado no momento da adição (o servidor confirma depois).
  */
 import type { CakeComposition } from './cakeStudio/types';
-import type { CartQuoteCakeLine, CartQuoteProductLine } from './api';
+import type { CakeAddonChoice, CartQuoteCakeLine, CartQuoteProductLine } from './api';
 
 export const CART_STORAGE_KEY = 'lisscompany.cart.v1';
 
@@ -163,10 +163,19 @@ export function buildQuoteRequest(cart: Cart = getCart()): {
         extraIds: line.composition.extraIds,
         moist: line.composition.moist,
         quantity: line.quantity,
+        addons: addonChoices(line.composition),
       });
     }
   }
   return { productLines, cakeLines };
+}
+
+/** Complementos escolhidos, com a mensagem (aparada) só quando foi escrita. */
+export function addonChoices(composition: CakeComposition): CakeAddonChoice[] {
+  return (composition.addonIds ?? []).map((id) => {
+    const message = composition.addonMessages?.[id]?.trim();
+    return message ? { id, message } : { id };
+  });
 }
 
 /** Soma das linhas em unidades mínimas (cêntimos) — sem ponto flutuante. */

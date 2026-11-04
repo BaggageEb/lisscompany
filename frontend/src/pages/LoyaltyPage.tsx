@@ -21,6 +21,7 @@ const TRANSACTION_LABELS: Record<LoyaltyTransactionView['type'], string> = {
   EARN: 'Pontos ganhos',
   REDEEM: 'Pontos usados',
   ADJUSTMENT: 'Ajuste da loja',
+  EXPIRE: 'Pontos expirados',
 };
 
 /**
@@ -174,6 +175,14 @@ export function LoyaltyPage() {
         )}
         {summary.configured && !summary.active && (
           <Badge tone="warning">Programa pausado pela loja</Badge>
+        )}
+        {summary.validityDays != null && (
+          <p className="lc-loyalty__note" data-testid="points-validity">
+            Os pontos são válidos por {summary.validityDays} dias a partir do dia em que são ganhos
+            {summary.nextExpiry
+              ? `. Próxima expiração: ${summary.nextExpiry.points} pontos a ${new Date(summary.nextExpiry.expiresAt).toLocaleDateString('pt-PT')}.`
+              : '.'}
+          </p>
         )}
         {summary.active && summary.earnPercent !== null && (
           <p className="lc-loyalty__note">

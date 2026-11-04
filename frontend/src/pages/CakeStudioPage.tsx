@@ -5,12 +5,12 @@ import { OptionCard } from '../components/cakeStudio/OptionCard';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
 import { ApiError, fetchCakeStudioOptions, postCakeQuote } from '../lib/api';
-import { addCartLine, cartQuantity } from '../lib/cart';
+import { addCartLine, addonChoices, cartQuantity } from '../lib/cart';
 import { estimateComposition } from '../lib/cakeStudio/pricing';
 import { cakeStudioReducer, canReachStep, INITIAL_STATE } from '../lib/cakeStudio/state';
 import type { CakeStudioAction, CakeStudioState } from '../lib/cakeStudio/state';
 import type { CakeQuote, CakeStudioOptions, CakeStudioStep } from '../lib/cakeStudio/types';
-import { isCompositionComplete, validateComposition } from '../lib/cakeStudio/validation';
+import { ADDON_MESSAGE_MAX, isCompositionComplete, validateComposition } from '../lib/cakeStudio/validation';
 import { formatKz } from '../lib/money';
 import '../components/cakeStudio/cake-studio.css';
 
@@ -28,7 +28,7 @@ const STEPS: Array<{ n: CakeStudioStep; short: string; title: string; hint: stri
   { n: 2, short: '1º recheio', title: 'Primeiro recheio', hint: 'Escolhe o primeiro recheio do teu bolo.' },
   { n: 3, short: 'Massa ×2', title: 'Segunda camada de massa', hint: 'A segunda camada entra no copo com a mesma massa.' },
   { n: 4, short: '2º recheio', title: 'Segundo recheio', hint: 'Repete o primeiro ou escolhe outro — até dois tipos distintos.' },
-  { n: 5, short: 'Extras', title: 'Personalização final', hint: 'Zero a três extras e a humidade do bolo.' },
+  { n: 5, short: 'Extras', title: 'Personalização final', hint: 'Zero a três extras, complementos (velas, cartões…) e a humidade do bolo.' },
   { n: 6, short: 'Revisão', title: 'Revisão e carrinho', hint: 'Confirma a composição e o preço final.' },
 ];
 
@@ -106,6 +106,8 @@ export function CakeStudioPage() {
         .map((id) => options.extras.find((o) => o.id === id))
         .filter((o): o is NonNullable<typeof o> => Boolean(o))
     : [];
+  const availableAddons = options?.addons ?? [];
+  const selectedAddons = availableAddons.filter((o) => (composition.addonIds ?? []).includes(o.id));
 
   /* ----------------- Orçamento do servidor (passo 6) ------------------ */
 
@@ -127,6 +129,7 @@ export function CakeStudioPage() {
           secondFillingId: composition.secondFillingId!,
           extraIds: composition.extraIds,
           moist: composition.moist,
+          addons: addonChoices(composition),
         },
         controller.signal,
       )
@@ -159,6 +162,10 @@ export function CakeStudioPage() {
       `2º recheio: ${selectedFilling2?.name ?? ''}`,
       ...selectedExtras.map((extra) => `Extra: ${extra.name}`),
       composition.moist ? 'Bolo molhado' : 'Bolo não molhado',
+      ...selectedAddons.map((addon) => {
+        const message = composition.addonMessages?.[addon.id]?.trim();
+        return `Complemento: ${addon.name}${message ? ` — mensagem: «${message}»` : ''}`;
+      }),
     ];
     addCartLine({
       kind: 'CAKE',
@@ -395,6 +402,54 @@ export function CakeStudioPage() {
                 </p>
               </fieldset>
 
+              {availableAddons.length > 0 && (
+                <fieldset className="studio__fieldset" data-testid="addons-fieldset">
+                  <legend>Complementos (velas, cartões, mensagens)</legend>
+                  <div className="studio__options">
+                    {availableAddons.map((option) => (
+                      <OptionCard
+                        key={option.id}
+                        option={option}
+                        kind="ADDON"
+                        mode="checkbox"
+                        name={`addon-${option.id}`}
+                        checked={(composition.addonIds ?? []).includes(option.id)}
+                        onSelect={(id) => dispatch({ type: 'TOGGLE_ADDON', id })}
+                      />
+                    ))}
+                  </div>
+                  {selectedAddons
+                    .filter((addon) => addon.allowsMessage)
+                    .map((addon) => {
+                      const value = composition.addonMessages?.[addon.id] ?? '';
+                      return (
+                        <div key={addon.id} className="studio__message">
+                          <label htmlFor={`addon-message-${addon.id}`}>
+                            Mensagem ou dedicatória — {addon.name} (opcional)
+                          </label>
+                          <textarea
+                            id={`addon-message-${addon.id}`}
+                            rows={2}
+                            maxLength={ADDON_MESSAGE_MAX}
+                            value={value}
+                            placeholder="Ex.: Parabéns, Mãe! Com todo o carinho."
+                            onChange={(event) =>
+                              dispatch({ type: 'SET_ADDON_MESSAGE', id: addon.id, message: event.target.value })
+                            }
+                          />
+                          <span className="studio__message-count">
+                            {value.length}/{ADDON_MESSAGE_MAX}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  <p className="studio__panel-note">
+                    Os complementos não contam para o limite de {options.rules.maxExtras} extras; o preço de cada um
+                    soma-se ao total.
+                  </p>
+                </fieldset>
+              )}
+
               <fieldset className="studio__fieldset">
                 <legend>Humidade do bolo</legend>
                 <div className="studio__moist">
@@ -448,6 +503,22 @@ export function CakeStudioPage() {
                   <dt>Humidade</dt>
                   <dd>{composition.moist ? 'Molhado' : 'Não molhado'}</dd>
                 </div>
+                {selectedAddons.length > 0 && (
+                  <div>
+                    <dt>Complementos</dt>
+                    <dd>
+                      {selectedAddons.map((addon) => {
+                        const message = composition.addonMessages?.[addon.id]?.trim();
+                        return (
+                          <span key={addon.id} className="studio__review-addon">
+                            {addon.name}
+                            {message ? ` — «${message}»` : ''}
+                          </span>
+                        );
+                      })}
+                    </dd>
+                  </div>
+                )}
               </dl>
 
               <div className="studio__review-quote" aria-live="polite">

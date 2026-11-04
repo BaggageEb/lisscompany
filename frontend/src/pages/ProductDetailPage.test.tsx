@@ -36,6 +36,7 @@ function renderDetail(slug = 'bolo-no-pote-classico') {
       <Routes>
         <Route path="/loja/:slug" element={<ProductDetailPage />} />
         <Route path="/loja" element={<div>PAGINA_LOJA</div>} />
+        <Route path="/cake-studio" element={<div>PAGINA_CAKE_STUDIO</div>} />
       </Routes>
     </BrowserRouter>,
   );
@@ -70,6 +71,18 @@ describe('ProductDetailPage', () => {
       quantity: 1,
     });
     expect(await screen.findByText(/Carrinho: 1 artigo/i)).toBeInTheDocument();
+  });
+
+  it('bolo personalizado é encaminhado para o Cake Studio e nunca entra no carrinho directamente', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(makeProduct({ customizable: true })));
+    const user = userEvent.setup();
+    renderDetail();
+
+    expect(screen.queryByRole('button', { name: /Adicionar ao carrinho/i })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: /Personalizar no Cake Studio/i }));
+
+    expect(await screen.findByText('PAGINA_CAKE_STUDIO')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(CART_STORAGE_KEY) ?? '{"lines":[]}').lines).toHaveLength(0);
   });
 
   it('acumula quantidade quando o mesmo produto é adicionado duas vezes', async () => {

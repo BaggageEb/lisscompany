@@ -116,6 +116,8 @@ describe('cakeStudioReducer — sequência fixa', () => {
       secondFillingId: null,
       extraIds: [],
       moist: false,
+      addonIds: [],
+      addonMessages: {},
     });
   });
 

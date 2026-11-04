@@ -13,7 +13,13 @@ import {
 } from '../../lib/api';
 import { formatKz } from '../../lib/money';
 
-const KINDS: Record<string, string> = { DOUGH: 'Massa', FILLING: 'Recheio', EXTRA: 'Extra' };
+const KINDS: Record<string, string> = {
+  CAKE_BASE: 'Massa',
+  DOUGH: 'Massa',
+  FILLING: 'Recheio',
+  EXTRA: 'Extra',
+  ADDON: 'Complemento',
+};
 
 const EMPTY: AdminIngredientBody = {
   kind: 'FILLING',
@@ -25,6 +31,7 @@ const EMPTY: AdminIngredientBody = {
   imageUrl: null,
   trackStock: false,
   stockQty: null,
+  allowsMessage: false,
 };
 
 /** Massas, recheios e extras do Cake Studio: preço, fotografia, disponibilidade e stock. */
@@ -62,9 +69,10 @@ export function AdminIngredientsPage() {
       <div className="lc-toolbar">
         <Select label="Tipo" value={kind} onChange={(e) => setKind(e.target.value)}>
           <option value="">Todos</option>
-          <option value="DOUGH">Massas</option>
+          <option value="CAKE_BASE">Massas</option>
           <option value="FILLING">Recheios</option>
-          <option value="EXTRA">Extras</option>
+          <option value="EXTRA">Extras (máx. 3 por bolo)</option>
+          <option value="ADDON">Complementos (velas, cartões…)</option>
         </Select>
       </div>
 
@@ -157,6 +165,7 @@ function IngredientForm({
           imageUrl: item.imageUrl,
           trackStock: item.stockQty != null,
           stockQty: item.stockQty,
+          allowsMessage: item.allowsMessage ?? false,
         }
       : EMPTY,
   );
@@ -188,9 +197,10 @@ function IngredientForm({
         {error && <Notice tone="error">{error}</Notice>}
         <div className="lc-form__row">
           <Select label="Tipo" value={form.kind} error={fieldErrors.kind} onChange={(e) => set('kind', e.target.value)}>
-            <option value="DOUGH">Massa</option>
+            <option value="CAKE_BASE">Massa</option>
             <option value="FILLING">Recheio</option>
-            <option value="EXTRA">Extra</option>
+            <option value="EXTRA">Extra (conta para o limite de 3)</option>
+            <option value="ADDON">Complemento (vela, cartão…)</option>
           </Select>
           <Input label="Nome" required value={form.name} error={fieldErrors.name} onChange={(e) => set('name', e.target.value)} />
         </div>
@@ -211,6 +221,16 @@ function IngredientForm({
             onChange={(e) => set('displayOrder', Number.parseInt(e.target.value.replace(/[^0-9]/g, '') || '0', 10))}
           />
         </div>
+        {form.kind === 'ADDON' && (
+          <label className="lc-check">
+            <input
+              type="checkbox"
+              checked={form.allowsMessage ?? false}
+              onChange={(e) => set('allowsMessage', e.target.checked)}
+            />
+            Permite ao cliente escrever uma mensagem ou dedicatória (ex.: cartão)
+          </label>
+        )}
         <ImageField label="Fotografia" value={form.imageUrl} alt={`Fotografia de ${form.name || 'ingrediente'}`} onChange={(url) => set('imageUrl', url)} />
         <label className="lc-check">
           <input

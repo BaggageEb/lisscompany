@@ -8,8 +8,11 @@
 import type { CakeComposition, CakeStudioOptions } from './types';
 import { findOption } from './pricing';
 
+/** Tamanho máximo da mensagem/dedicatória de um complemento (igual ao servidor). */
+export const ADDON_MESSAGE_MAX = 200;
+
 export interface CompositionIssue {
-  field: 'cakeBase' | 'firstFilling' | 'secondFilling' | 'extras';
+  field: 'cakeBase' | 'firstFilling' | 'secondFilling' | 'extras' | 'addons';
   message: string;
 }
 
@@ -62,6 +65,23 @@ export function validateComposition(composition: CakeComposition, options: CakeS
     const extra = findOption(options, 'EXTRA', id);
     if (!extra || !extra.available) {
       issues.push({ field: 'extras', message: 'Um dos extras escolhidos já não está disponível.' });
+    }
+  }
+
+  // Complementos: independentes dos extras (nunca entram na contagem do limite).
+  for (const id of composition.addonIds ?? []) {
+    const addon = findOption(options, 'ADDON', id);
+    if (!addon || !addon.available) {
+      issues.push({ field: 'addons', message: 'Um dos complementos escolhidos já não está disponível.' });
+    }
+  }
+  for (const [id, message] of Object.entries(composition.addonMessages ?? {})) {
+    if (message.length > ADDON_MESSAGE_MAX) {
+      issues.push({ field: 'addons', message: `A mensagem não pode ter mais de ${ADDON_MESSAGE_MAX} caracteres.` });
+    }
+    const addon = findOption(options, 'ADDON', id);
+    if (message.trim() && !addon?.allowsMessage) {
+      issues.push({ field: 'addons', message: 'Este complemento não admite mensagem.' });
     }
   }
 

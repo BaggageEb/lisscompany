@@ -327,3 +327,15 @@
     justify-content: flex-start;
   }
 }
+
+/* Mensagem / dedicatória escrita pelo cliente: destaque para a proprietária não a perder. */
+.lc-admin__dedication {
+  display: block;
+  margin-top: 0.35rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--lc-brand, #c9a24b);
+  background: var(--lc-surface-sunken, rgba(201, 162, 75, 0.12));
+  border-radius: 6px;
+  font-size: var(--lc-text-sm);
+  white-space: pre-wrap;
+}

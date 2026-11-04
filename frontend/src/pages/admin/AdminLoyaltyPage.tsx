@@ -5,13 +5,18 @@ import {
   fetchAdminDiscounts,
   fetchAdminLoyaltyAccounts,
   fetchAdminLoyaltyConfig,
+  fetchPointsValidity,
+  previewPointsValidity,
   saveAdminLoyaltyRule,
+  savePointsValidity,
   upsertAdminDiscount,
   upsertAdminReward,
   type DiscountRuleView,
   type LoyaltyAdminAccountView,
   type LoyaltyAdminConfig,
   type LoyaltyAdminRewardView,
+  type PointsValidity,
+  type PointsValidityPreview,
 } from '../../lib/api';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -255,6 +260,8 @@ export function AdminLoyaltyPage() {
           <p>{error}</p>
         </div>
       )}
+
+      <PointsValidityPanel />
 
       {/* ------------------------------ Regra ------------------------------ */}
       <Card as="section" elevation="raised" padding="lg" className="lc-admin__section">
@@ -716,5 +723,146 @@ export function AdminLoyaltyPage() {
         )}
       </Card>
     </>
+  );
+}
+
+const CUSTOM = 'custom';
+const NONE = 'none';
+
+/**
+ * Validade dos pontos: prazo global em dias (atalhos ou valor livre) guardado
+ * na base de dados. Aplica-se aos novos pontos e também aos já existentes; os
+ * pontos vencidos expiram automaticamente e deixam de poder ser usados.
+ */
+function PointsValidityPanel() {
+  const [validity, setValidity] = useState<PointsValidity | null>(null);
+  const [choice, setChoice] = useState<string>(NONE);
+  const [custom, setCustom] = useState('');
+  const [preview, setPreview] = useState<PointsValidityPreview | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const apply = useCallback((view: PointsValidity) => {
+    setValidity(view);
+    if (view.days === null) {
+      setChoice(NONE);
+      setCustom('');
+    } else if (view.presets.includes(view.days)) {
+      setChoice(String(view.days));
+      setCustom('');
+    } else {
+      setChoice(CUSTOM);
+      setCustom(String(view.days));
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchPointsValidity(controller.signal)
+      .then(apply)
+      .catch((cause) => {
+        if (!controller.signal.aborted) setError(cause instanceof ApiError ? cause.message : 'Não foi possível carregar a validade dos pontos.');
+      });
+    return () => controller.abort();
+  }, [apply]);
+
+  const chosenDays: number | null | undefined =
+    choice === NONE ? null : choice === CUSTOM ? (/^\d+$/.test(custom.trim()) ? Number.parseInt(custom, 10) : undefined) : Number.parseInt(choice, 10);
+
+  // Antes de gravar, mostra quantos pontos existentes expirariam já com este prazo.
+  useEffect(() => {
+    setPreview(null);
+    if (typeof chosenDays !== 'number' || chosenDays < 1 || chosenDays === validity?.days) return;
+    const controller = new AbortController();
+    previewPointsValidity(chosenDays, controller.signal)
+      .then(setPreview)
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [chosenDays, validity?.days]);
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setMessage(null);
+    if (chosenDays === undefined) {
+      setError('Indique o prazo em dias (número inteiro).');
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await savePointsValidity(chosenDays);
+      apply(result);
+      setMessage(
+        result.days === null
+          ? 'Os pontos deixaram de ter prazo de validade.'
+          : `Validade de ${result.days} dias aplicada aos pontos novos e aos já existentes.`,
+      );
+    } catch (cause) {
+      setError(cause instanceof ApiError ? Object.values(cause.fieldErrors)[0] ?? cause.message : 'Não foi possível guardar a validade.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card as="section" elevation="raised" padding="lg" className="lc-admin__section" aria-labelledby="validity-title">
+      <h2 id="validity-title">Validade dos pontos</h2>
+      <p className="lc-admin__section-note">
+        {validity === null
+          ? 'A carregar…'
+          : validity.days === null
+            ? 'Neste momento os pontos não expiram. Defina um prazo para que expirem automaticamente.'
+            : `Os pontos expiram ${validity.days} dias depois de serem ganhos. ${validity.outstandingPoints} pontos por gastar (${validity.expiringSoonPoints} a expirar nos próximos 30 dias).`}
+      </p>
+      {error && (
+        <div className="lc-admin__banner lc-admin__banner--danger" role="alert">
+          <p>{error}</p>
+        </div>
+      )}
+      {message && (
+        <div className="lc-admin__banner lc-admin__banner--success" role="status">
+          <p>{message}</p>
+        </div>
+      )}
+      {validity && (
+        <form onSubmit={save} noValidate className="lc-admin__form">
+          <div role="radiogroup" aria-label="Prazo de validade" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+            {validity.presets.map((days) => (
+              <label key={days} className="lc-admin__check">
+                <input type="radio" name="validity" value={days} checked={choice === String(days)} onChange={() => setChoice(String(days))} />{' '}
+                {days} dias
+              </label>
+            ))}
+            <label className="lc-admin__check">
+              <input type="radio" name="validity" value={CUSTOM} checked={choice === CUSTOM} onChange={() => setChoice(CUSTOM)} /> Outro valor
+            </label>
+            <label className="lc-admin__check">
+              <input type="radio" name="validity" value={NONE} checked={choice === NONE} onChange={() => setChoice(NONE)} /> Sem validade
+            </label>
+          </div>
+          {choice === CUSTOM && (
+            <label className="lc-admin__field">
+              <span>Prazo em dias (1 a {validity.maxDays})</span>
+              <input
+                inputMode="numeric"
+                value={custom}
+                onChange={(event) => setCustom(event.target.value)}
+                aria-label="Prazo em dias"
+              />
+            </label>
+          )}
+          {preview && preview.pointsExpiringNow > 0 && (
+            <p className="lc-admin__section-note" role="status" data-testid="validity-preview">
+              Atenção: com este prazo, {preview.pointsExpiringNow} pontos de {preview.accountsAffected} cliente(s) expirariam
+              logo ao guardar. Pontos já expirados não são repostos.
+            </p>
+          )}
+          <Button type="submit" loading={busy}>
+            Guardar validade
+          </Button>
+        </form>
+      )}
+    </Card>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, fetchProduct, type ProductSummary } from '../lib/api';
 import { addCartLine, cartQuantity } from '../lib/cart';
 import { formatKz } from '../lib/money';
@@ -20,6 +20,7 @@ type LoadState =
  */
 export function ProductDetailPage() {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [reloadToken, setReloadToken] = useState(0);
   const [added, setAdded] = useState(false);
@@ -45,6 +46,11 @@ export function ProductDetailPage() {
   }, [slug, reloadToken]);
 
   function handleAdd(product: ProductSummary) {
+    // Bolo personalizado: nunca entra no carrinho sem passar pela configuração.
+    if (product.customizable) {
+      navigate('/cake-studio');
+      return;
+    }
     addCartLine({
       kind: 'PRODUCT',
       productId: product.id,
@@ -143,7 +149,7 @@ export function ProductDetailPage() {
 
           <div className="shop__detail-actions">
             <Button size="lg" disabled={!product.available} onClick={() => handleAdd(product)}>
-              {added ? 'Adicionado ✓' : 'Adicionar ao carrinho'}
+              {product.customizable ? 'Personalizar no Cake Studio' : added ? 'Adicionado ✓' : 'Adicionar ao carrinho'}
             </Button>
             <span className="shop__cart-hint" aria-live="polite">
               Carrinho: {cartCount} {cartCount === 1 ? 'artigo' : 'artigos'}

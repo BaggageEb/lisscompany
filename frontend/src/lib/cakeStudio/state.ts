@@ -26,6 +26,8 @@ export const INITIAL_COMPOSITION: CakeComposition = Object.freeze({
   secondFillingId: null,
   extraIds: [] as string[],
   moist: false,
+  addonIds: [] as string[],
+  addonMessages: {} as Record<string, string>,
 });
 
 export const INITIAL_STATE: CakeStudioState = {
@@ -37,6 +39,8 @@ export type CakeStudioAction =
   | { type: 'SELECT_CAKE_BASE'; id: string }
   | { type: 'SELECT_FILLING'; slot: 1 | 2; id: string }
   | { type: 'TOGGLE_EXTRA'; id: string }
+  | { type: 'TOGGLE_ADDON'; id: string }
+  | { type: 'SET_ADDON_MESSAGE'; id: string; message: string }
   | { type: 'SET_MOIST'; moist: boolean }
   | { type: 'GO_TO_STEP'; step: CakeStudioStep }
   | { type: 'NEXT' }
@@ -99,6 +103,38 @@ export function cakeStudioReducer(
         ? state.composition.extraIds.filter((id) => id !== option.id)
         : [...state.composition.extraIds, option.id];
       return { ...state, composition: { ...state.composition, extraIds } };
+    }
+
+    case 'TOGGLE_ADDON': {
+      // Complementos não têm limite de quantidade e nunca ocupam vagas dos extras.
+      const option = findOption(options, 'ADDON', action.id);
+      if (!option || !option.available) return state;
+      const current = state.composition.addonIds ?? [];
+      const selected = current.includes(option.id);
+      const addonIds = selected ? current.filter((id) => id !== option.id) : [...current, option.id];
+      // Ao retirar o complemento, a mensagem associada vai com ele.
+      const { [option.id]: _removed, ...kept } = state.composition.addonMessages ?? {};
+      void _removed;
+      return {
+        ...state,
+        composition: {
+          ...state.composition,
+          addonIds,
+          addonMessages: selected ? kept : (state.composition.addonMessages ?? {}),
+        },
+      };
+    }
+
+    case 'SET_ADDON_MESSAGE': {
+      const option = findOption(options, 'ADDON', action.id);
+      if (!option || !option.allowsMessage || !(state.composition.addonIds ?? []).includes(option.id)) return state;
+      return {
+        ...state,
+        composition: {
+          ...state.composition,
+          addonMessages: { ...(state.composition.addonMessages ?? {}), [option.id]: action.message },
+        },
+      };
     }
 
     case 'SET_MOIST':

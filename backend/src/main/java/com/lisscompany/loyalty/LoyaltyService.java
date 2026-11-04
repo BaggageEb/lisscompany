@@ -2,6 +2,7 @@ package com.lisscompany.loyalty;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -74,6 +75,7 @@ public class LoyaltyService {
     private final AppUserRepository userRepository;
     private final AuditService auditService;
     private final PaymentRepository paymentRepository;
+    private final PointsLotService lotService;
 
     public LoyaltyService(
             LoyaltyRuleRepository ruleRepository,
@@ -86,8 +88,10 @@ public class LoyaltyService {
             CustomerOrderRepository orderRepository,
             AppUserRepository userRepository,
             AuditService auditService,
-            PaymentRepository paymentRepository) {
+            PaymentRepository paymentRepository,
+            PointsLotService lotService) {
         this.paymentRepository = paymentRepository;
+        this.lotService = lotService;
         this.ruleRepository = ruleRepository;
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
@@ -152,7 +156,28 @@ public class LoyaltyService {
             String rounding,
             Boolean allowPartialRedemption,
             WelcomeView welcome,
-            List<RewardStatusView> rewards) {}
+            List<RewardStatusView> rewards,
+            /** Prazo de validade dos pontos em dias; nulo = os pontos não expiram. */
+            Integer validityDays,
+            /** Próxima data em que caducam pontos deste cliente (nulo = nenhuma). */
+            ExpiryView nextExpiry) {}
+
+    /** Pontos que caducam numa data. */
+    public record ExpiryView(String expiresAt, int points) {}
+
+    /** Configuração da validade dos pontos (painel). */
+    public record ValidityView(
+            /** Prazo em dias; nulo = sem prazo (os pontos não expiram). */
+            Integer days,
+            List<Integer> presets,
+            int maxDays,
+            /** Pontos por gastar em todas as contas (lotes ainda não esgotados). */
+            long outstandingPoints,
+            /** Pontos que caducam nos próximos 30 dias. */
+            long expiringSoonPoints) {}
+
+    /** Efeito de um prazo hipotético sobre os pontos existentes. */
+    public record ValidityPreview(Integer days, int pointsExpiringNow, int accountsAffected) {}
 
     public record TransactionView(
             String type,
@@ -196,7 +221,10 @@ public class LoyaltyService {
         LoyaltyRule rule = maybeRule.orElse(null);
         RuleView ruleView = rule == null ? null : ruleView(rule);
         LoyaltyAccount account = accountRepository.findByUserId(userId).orElse(null);
-        int balance = account == null ? 0 : account.getPointsBalance();
+        // Saldo utilizável: pontos já vencidos (ainda por varrer) nunca contam.
+        Instant now = Instant.now();
+        int balance = account == null ? 0 : lotService.usableBalance(account.getId(), now);
+        PointsLotService.Expiring expiring = account == null ? null : lotService.nextExpiry(account.getId(), now);
         long orders = orderRepository.countEligibleOrders(userId);
         long placedOrders = orderRepository.countByUserIdAndStatusNot(userId, OrderStatus.CANCELLED);
         boolean programActive = rule != null && rule.isActive();
@@ -217,14 +245,16 @@ public class LoyaltyService {
         return new SummaryView(
                 rule != null,
                 programActive,
-                account == null ? 0 : account.getPointsBalance(),
+                balance,
                 account == null ? 0 : account.getLifetimePoints(),
                 ruleView == null ? null : ruleView.earnPercent(),
                 ruleView == null ? null : ruleView.pointValueKz(),
                 ruleView == null ? null : ruleView.rounding(),
                 ruleView == null ? null : ruleView.allowPartialRedemption(),
                 welcome,
-                rewards);
+                rewards,
+                lotService.validityDays(),
+                expiring == null ? null : new ExpiryView(expiring.at().toString(), expiring.points()));
     }
 
     /** Histórico de pontos do cliente (mais recente primeiro). */
@@ -467,6 +497,11 @@ public class LoyaltyService {
                 pointsValue(points, rule.getPointValueKz()),
                 note == null || note.isBlank() ? "Ajuste manual do painel" : note.trim(),
                 actor.getId());
+        if (points > 0) {
+            lotService.addLot(account.getId(), saved.getId(), points, Instant.now());
+        } else {
+            lotService.consume(account.getId(), saved.getId(), -points, Instant.now());
+        }
 
         auditService.record(
                 actor.getId(),
@@ -555,7 +590,7 @@ public class LoyaltyService {
             account.apply(-applied.pointsSpent());
             accountRepository.save(account);
 
-            saveTransaction(
+            LoyaltyTransaction redeemed = saveTransaction(
                     account,
                     order.getId(),
                     LoyaltyTransactionType.REDEEM,
@@ -565,6 +600,8 @@ public class LoyaltyService {
                     applied.amount(),
                     "Resgate na encomenda " + order.getOrderNumber(),
                     principal.id());
+            // Os pontos gastos saem dos lotes que caducam primeiro (FIFO).
+            lotService.consume(account.getId(), redeemed.getId(), applied.pointsSpent(), Instant.now());
 
             auditService.record(
                     principal.id(),
@@ -633,7 +670,7 @@ public class LoyaltyService {
         account.apply(order.getPointsSpent());
         accountRepository.save(account);
 
-        saveTransaction(
+        LoyaltyTransaction refund = saveTransaction(
                 account,
                 order.getId(),
                 LoyaltyTransactionType.ADJUSTMENT,
@@ -643,6 +680,14 @@ public class LoyaltyService {
                 pointsValue(order.getPointsSpent(), rate),
                 "Devolução de pontos por cancelamento da encomenda " + order.getOrderNumber(),
                 actorUserId);
+        // Os pontos voltam aos lotes de onde saíram (ou a um lote novo, se esse já expirou).
+        Instant now = Instant.now();
+        int restored = transactionRepository.findByOrderIdAndType(order.getId(), LoyaltyTransactionType.REDEEM)
+                .map(redeemed -> lotService.restore(account.getId(), redeemed.getId(), refund.getId(), now))
+                .orElse(0);
+        if (restored < order.getPointsSpent()) {
+            lotService.addLot(account.getId(), refund.getId(), order.getPointsSpent() - restored, now);
+        }
 
         auditService.record(
                 actorUserId,
@@ -706,7 +751,7 @@ public class LoyaltyService {
         account.apply(points);
         accountRepository.save(account);
 
-        saveTransaction(
+        LoyaltyTransaction earned = saveTransaction(
                 account,
                 order.getId(),
                 LoyaltyTransactionType.EARN,
@@ -716,6 +761,8 @@ public class LoyaltyService {
                 eligible,
                 "Encomenda " + order.getOrderNumber() + " paga",
                 actorUserId);
+        // Novo lote: a validade conta a partir de hoje, com o prazo em vigor.
+        lotService.addLot(account.getId(), earned.getId(), points, Instant.now());
 
         auditService.record(
                 actorUserId,
@@ -757,9 +804,10 @@ public class LoyaltyService {
         BigDecimal rate = rule == null ? BigDecimal.ONE : rule.getPointValueKz();
         account.apply(-toRemove);
         accountRepository.save(account);
-        saveTransaction(account, null, LoyaltyTransactionType.ADJUSTMENT, -toRemove, LoyaltyRateKind.POINT_VALUE,
-                rate, pointsValue(toRemove, rate),
+        LoyaltyTransaction reversal = saveTransaction(account, null, LoyaltyTransactionType.ADJUSTMENT, -toRemove,
+                LoyaltyRateKind.POINT_VALUE, rate, pointsValue(toRemove, rate),
                 "Estorno de pontos por reembolso da encomenda " + order.getOrderNumber(), actorUserId);
+        lotService.consume(account.getId(), reversal.getId(), toRemove, Instant.now());
         auditService.record(actorUserId, actorLabel, "loyalty.points_reversed", "customer_order",
                 order.getId().toString(),
                 "Encomenda %s · reembolso %s Kz · −%d pontos · saldo %d".formatted(
@@ -897,13 +945,122 @@ public class LoyaltyService {
                 account.getId(), reward.getId());
     }
 
+    /**
+     * Conta bloqueada para escrita, já com os pontos vencidos retirados: toda a
+     * operação que gasta ou credita pontos passa por aqui, pelo que pontos
+     * expirados nunca chegam a ser utilizáveis (mesmo antes do varrimento
+     * periódico).
+     */
     private LoyaltyAccount accountFor(UUID userId) {
-        return accountRepository.findByUserIdForUpdate(userId).orElseGet(() -> {
-            LoyaltyAccount account = new LoyaltyAccount();
-            account.setUserId(userId);
-            accountRepository.saveAndFlush(account);
-            return accountRepository.findByUserIdForUpdate(userId).orElse(account);
+        LoyaltyAccount account = accountRepository.findByUserIdForUpdate(userId).orElseGet(() -> {
+            LoyaltyAccount created = new LoyaltyAccount();
+            created.setUserId(userId);
+            accountRepository.saveAndFlush(created);
+            return accountRepository.findByUserIdForUpdate(userId).orElse(created);
         });
+        expireDue(account);
+        return account;
+    }
+
+    /**
+     * Retira da conta os pontos dos lotes vencidos: actualiza o saldo e deixa
+     * um movimento EXPIRE no livro-razão. Só expira o que sobrou de cada lote
+     * — pontos já gastos e lotes ainda válidos ficam intactos.
+     */
+    private int expireDue(LoyaltyAccount account) {
+        int expired = lotService.expireDue(account.getId(), Instant.now());
+        if (expired <= 0) {
+            return 0;
+        }
+        // Defesa: o saldo nunca fica negativo, mesmo que dados antigos estivessem dessincronizados.
+        int debit = Math.min(expired, account.getPointsBalance());
+        if (debit > 0) {
+            account.apply(-debit);
+            accountRepository.save(account);
+            LoyaltyRule rule = ruleRepository.findTopByOrderByIdDesc().orElse(null);
+            BigDecimal rate = rule == null ? BigDecimal.ONE : rule.getPointValueKz();
+            Integer days = lotService.validityDays();
+            saveTransaction(account, null, LoyaltyTransactionType.EXPIRE, -debit, LoyaltyRateKind.POINT_VALUE, rate,
+                    pointsValue(debit, rate),
+                    days == null ? "Pontos expirados" : "Pontos expirados (validade de " + days + " dias)",
+                    null);
+            auditService.record(null, "sistema", "loyalty.points_expired", "loyalty_account",
+                    account.getId().toString(),
+                    "−%d pontos expirados · saldo %d".formatted(debit, account.getPointsBalance()));
+        }
+        return debit;
+    }
+
+    /** Varrimento de uma conta (chamado pelo agendador); idempotente. */
+    @Transactional
+    public int expireAccount(UUID accountId) {
+        return accountRepository.findByIdForUpdate(accountId).map(this::expireDue).orElse(0);
+    }
+
+    /** Contas com lotes vencidos, para o varrimento periódico. */
+    @Transactional(readOnly = true)
+    public List<UUID> accountsWithDueLots() {
+        return lotService.accountsWithDueLots(Instant.now());
+    }
+
+    /* ----------------------- Validade dos pontos (painel) ----------------------- */
+
+    static final List<Integer> VALIDITY_PRESETS = List.of(30, 60, 90, 180, 365);
+
+    @Transactional(readOnly = true)
+    public ValidityView validity() {
+        Instant now = Instant.now();
+        return new ValidityView(
+                lotService.validityDays(),
+                VALIDITY_PRESETS,
+                PointsLotService.MAX_VALIDITY_DAYS,
+                lotService.outstandingPoints(),
+                lotService.expiringWithin(now, 30));
+    }
+
+    /** O que aconteceria aos pontos existentes com este prazo (sem alterar nada). */
+    @Transactional(readOnly = true)
+    public ValidityPreview previewValidity(Integer days) {
+        validateDays(days);
+        int[] effect = lotService.previewImmediateExpiry(days, Instant.now());
+        return new ValidityPreview(days, effect[0], effect[1]);
+    }
+
+    /**
+     * Define o prazo global de validade dos pontos ({@code null} = sem prazo) e
+     * aplica-o aos pontos já existentes. Lotes que ficam vencidos com o novo
+     * prazo expiram já, na mesma operação; pontos já expirados não regressam.
+     */
+    @Transactional
+    public ValidityView setValidity(Integer days, AppUser actor) {
+        validateDays(days);
+        Integer previous = lotService.validityDays();
+        lotService.storeValidityDays(days, actor.getId());
+        int lots = lotService.applyValidityToExistingLots(days);
+
+        int expiredPoints = 0;
+        int accounts = 0;
+        for (UUID accountId : lotService.accountsWithDueLots(Instant.now())) {
+            int expired = accountRepository.findByIdForUpdate(accountId).map(this::expireDue).orElse(0);
+            if (expired > 0) {
+                expiredPoints += expired;
+                accounts++;
+            }
+        }
+        auditService.record(actor.getId(), actor.getEmail(), "loyalty.validity_changed", "loyalty_rule", null,
+                "Validade dos pontos: %s → %s · %d lote(s) actualizado(s) · %d ponto(s) expirado(s) em %d conta(s)"
+                        .formatted(
+                                previous == null ? "sem prazo" : previous + " dias",
+                                days == null ? "sem prazo" : days + " dias",
+                                lots, expiredPoints, accounts));
+        return validity();
+    }
+
+    private static void validateDays(Integer days) {
+        if (days != null && (days < 1 || days > PointsLotService.MAX_VALIDITY_DAYS)) {
+            throw new InvalidRequestException(Map.of(
+                    "days", "Indique um prazo entre 1 e " + PointsLotService.MAX_VALIDITY_DAYS + " dias."));
+        }
     }
 
     private LoyaltyTransaction saveTransaction(
@@ -926,7 +1083,8 @@ public class LoyaltyService {
         transaction.setAmountKz(amountKz);
         transaction.setNote(note);
         transaction.setCreatedBy(createdBy);
-        return transactionRepository.save(transaction);
+        // flush: os lotes (FK) referenciam o movimento acabado de gravar.
+        return transactionRepository.saveAndFlush(transaction);
     }
 
     /** Pontos creditados pelo valor elegível, com a regra de arredondamento configurada. */

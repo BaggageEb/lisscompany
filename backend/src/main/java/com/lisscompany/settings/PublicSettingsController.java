@@ -13,7 +13,11 @@ import com.lisscompany.delivery.DeliveryService;
 @RequestMapping("/api/v1/public")
 public class PublicSettingsController {
 
-    public record StoreInfo(SettingsService.PublicSettings settings, List<DeliveryService.Zone> deliveryZones) {}
+    public record StoreInfo(
+            SettingsService.PublicSettings settings,
+            /** Zonas activas com preço (as únicas que o cliente pode escolher). */
+            List<DeliveryService.Zone> deliveryZones,
+            DeliveryService.PublicDelivery delivery) {}
 
     private final SettingsService settings;
     private final DeliveryService delivery;
@@ -25,6 +29,9 @@ public class PublicSettingsController {
 
     @GetMapping("/store")
     public StoreInfo store() {
-        return new StoreInfo(settings.publicView(), delivery.list(true));
+        return new StoreInfo(
+                settings.publicView(),
+                delivery.list(true).stream().filter(DeliveryService.Zone::priced).toList(),
+                delivery.publicDelivery());
     }
 }

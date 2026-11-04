@@ -7,5 +7,7 @@ public enum IngredientKind {
     /** Recheio — até duas camadas, no máximo {@code maxDistinctFillings} distintos. */
     FILLING,
     /** Extra opcional — zero a {@code maxExtras}. */
-    EXTRA
+    EXTRA,
+    /** Complemento (velas, cartões, mensagens): categoria à parte, fora do limite de extras. */
+    ADDON
 }

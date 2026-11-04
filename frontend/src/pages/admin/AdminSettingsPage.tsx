@@ -1,20 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Badge } from '../../components/ui/Badge';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Spinner } from '../../components/ui/Spinner';
-import { Drawer, Notice, PageHead, TextArea, describeError } from '../../components/admin/AdminUi';
-import {
-  ApiError,
-  deleteAdminZone,
-  fetchAdminSettings,
-  fetchAdminZones,
-  saveAdminSettings,
-  saveAdminZone,
-  type AdminSettings,
-  type DeliveryZone,
-} from '../../lib/api';
-import { formatKz } from '../../lib/money';
+import { Notice, PageHead, TextArea, describeError } from '../../components/admin/AdminUi';
+import { ApiError, fetchAdminSettings, saveAdminSettings, type AdminSettings } from '../../lib/api';
 
 type TabId = 'contactos' | 'pagamentos' | 'levantamento' | 'entrega' | 'politicas';
 
@@ -128,7 +118,10 @@ export function AdminSettingsPage() {
                   { key: 'delivery.notes', label: 'Notas sobre entregas', type: 'text' },
                 ]}
               />
-              <ZonesPanel />
+              <p className="lc-panel">
+                Os preços de entrega (preço fixo, por zona ou gratuita) configuram-se em{' '}
+                <Link to="/admin/entregas">Configuração de entregas</Link>.
+              </p>
             </>
           )}
           {tab === 'politicas' && (
@@ -246,163 +239,5 @@ function SettingsForm({
         </Button>
       </div>
     </form>
-  );
-}
-
-function ZonesPanel() {
-  const [zones, setZones] = useState<DeliveryZone[] | null>(null);
-  const [editing, setEditing] = useState<DeliveryZone | 'new' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setZones(await fetchAdminZones());
-    } catch (cause) {
-      setError(describeError(cause));
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  return (
-    <section className="lc-panel" aria-labelledby="zones-title">
-      <div className="lc-pagehead">
-        <div>
-          <h2 id="zones-title">Zonas e tarifas de entrega</h2>
-          <p>Sem zonas, a entrega fica «a combinar». Com zonas, o cliente escolhe uma e a tarifa é calculada no servidor.</p>
-        </div>
-        <Button onClick={() => setEditing('new')}>+ Nova zona</Button>
-      </div>
-      {error && <Notice tone="error">{error}</Notice>}
-      {!zones ? (
-        <Spinner />
-      ) : zones.length === 0 ? (
-        <p className="lc-empty">Ainda não há zonas de entrega.</p>
-      ) : (
-        <div className="lc-tablewrap">
-          <table className="lc-table">
-            <thead>
-              <tr>
-                <th>Zona</th>
-                <th className="lc-table__num">Tarifa</th>
-                <th className="lc-table__num">Grátis a partir de</th>
-                <th>Prazo / horário</th>
-                <th>Estado</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {zones.map((zone) => (
-                <tr key={zone.id}>
-                  <td>
-                    <strong>{zone.name}</strong>
-                  </td>
-                  <td className="lc-table__num">{formatKz(zone.fee)}</td>
-                  <td className="lc-table__num">{zone.freeOver ? formatKz(zone.freeOver) : '—'}</td>
-                  <td>{[zone.leadTime, zone.schedule].filter(Boolean).join(' · ') || '—'}</td>
-                  <td>{zone.active ? <Badge tone="success">Activa</Badge> : <Badge tone="neutral">Inactiva</Badge>}</td>
-                  <td>
-                    <Button size="sm" variant="secondary" onClick={() => setEditing(zone)}>
-                      Editar
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {editing && (
-        <ZoneForm
-          zone={editing === 'new' ? null : editing}
-          onClose={() => setEditing(null)}
-          onSaved={async () => {
-            setEditing(null);
-            await load();
-          }}
-        />
-      )}
-    </section>
-  );
-}
-
-function ZoneForm({ zone, onClose, onSaved }: { zone: DeliveryZone | null; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [form, setForm] = useState({
-    name: zone?.name ?? '',
-    fee: zone?.fee ?? '',
-    freeOver: zone?.freeOver ?? '',
-    leadTime: zone?.leadTime ?? '',
-    schedule: zone?.schedule ?? '',
-    active: zone?.active ?? true,
-  });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    setFieldErrors({});
-    try {
-      await saveAdminZone(zone?.id ?? null, {
-        name: form.name,
-        fee: form.fee,
-        freeOver: form.freeOver || undefined,
-        leadTime: form.leadTime || undefined,
-        schedule: form.schedule || undefined,
-        active: form.active,
-      });
-      await onSaved();
-    } catch (cause) {
-      if (cause instanceof ApiError && Object.keys(cause.fieldErrors).length > 0) setFieldErrors(cause.fieldErrors);
-      else setError(describeError(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function remove() {
-    if (!zone) return;
-    try {
-      await deleteAdminZone(zone.id);
-      await onSaved();
-    } catch (cause) {
-      setError(describeError(cause));
-    }
-  }
-
-  return (
-    <Drawer title={zone ? `Editar zona: ${zone.name}` : 'Nova zona de entrega'} onClose={onClose}>
-      <form className="lc-form" onSubmit={submit} noValidate>
-        {error && <Notice tone="error">{error}</Notice>}
-        <Input label="Nome da zona" required value={form.name} error={fieldErrors.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <div className="lc-form__row">
-          <Input label="Tarifa (Kz)" required inputMode="decimal" value={form.fee} error={fieldErrors.fee} hint="0 = entrega gratuita." onChange={(e) => setForm({ ...form, fee: e.target.value })} />
-          <Input label="Grátis a partir de (Kz)" inputMode="decimal" value={form.freeOver} error={fieldErrors.freeOver} hint="Opcional." onChange={(e) => setForm({ ...form, freeOver: e.target.value })} />
-        </div>
-        <Input label="Prazo de entrega" value={form.leadTime} onChange={(e) => setForm({ ...form, leadTime: e.target.value })} />
-        <Input label="Horário de entregas" value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} />
-        <label className="lc-check">
-          <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
-          Zona activa
-        </label>
-        <div className="lc-form__actions">
-          <Button type="submit" loading={busy}>
-            Guardar
-          </Button>
-          {zone && (
-            <Button variant="danger" onClick={() => void remove()}>
-              Remover zona
-            </Button>
-          )}
-          <Button variant="ghost" onClick={onClose}>
-            Cancelar
-          </Button>
-        </div>
-      </form>
-    </Drawer>
   );
 }

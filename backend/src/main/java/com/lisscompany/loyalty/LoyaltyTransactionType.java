@@ -10,5 +10,8 @@ public enum LoyaltyTransactionType {
     REDEEM,
 
     /** Ajuste manual do painel (ex.: estorno de encomenda cancelada). */
-    ADJUSTMENT
+    ADJUSTMENT,
+
+    /** Pontos caducados pela validade configurada (débito automático, sem encomenda). */
+    EXPIRE
 }

@@ -27,6 +27,7 @@ import { AdminProductsPage } from './pages/admin/AdminProductsPage';
 import { AdminIngredientsPage } from './pages/admin/AdminIngredientsPage';
 import { AdminCustomersPage } from './pages/admin/AdminCustomersPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
+import { AdminDeliveryPage } from './pages/admin/AdminDeliveryPage';
 import { AdminStaffPage } from './pages/admin/AdminStaffPage';
 import { AdminAuditPage } from './pages/admin/AdminAuditPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
@@ -96,6 +97,7 @@ export function App() {
             <Route path="ingredientes" element={<AdminIngredientsPage />} />
             <Route path="clientes" element={<AdminCustomersPage />} />
             <Route path="definicoes" element={<AdminSettingsPage />} />
+            <Route path="entregas" element={<AdminDeliveryPage />} />
             <Route path="equipa" element={<AdminStaffPage />} />
             <Route path="auditoria" element={<AdminAuditPage />} />
           </Route>

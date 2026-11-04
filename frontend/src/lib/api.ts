@@ -184,6 +184,8 @@ export interface ProductSummary {
   gallery?: string[];
   /** Unidades disponíveis; null/ausente = stock não controlado. */
   stockQty?: number | null;
+  /** Bolo personalizado: só pode ser comprado através do Cake Studio. */
+  customizable?: boolean;
 }
 
 /**
@@ -212,6 +214,7 @@ export function postCakeQuote(
     secondFillingId: string;
     extraIds: string[];
     moist: boolean;
+    addons?: CakeAddonChoice[];
   },
   signal?: AbortSignal,
 ): Promise<CakeQuote> {
@@ -232,6 +235,12 @@ export interface CartQuoteProductLine {
   quantity: number;
 }
 
+/** Complemento escolhido (vela, cartão…), com mensagem/dedicatória opcional. */
+export interface CakeAddonChoice {
+  id: string;
+  message?: string;
+}
+
 export interface CartQuoteCakeLine {
   cakeBaseId: string;
   firstFillingId: string;
@@ -239,6 +248,7 @@ export interface CartQuoteCakeLine {
   extraIds: string[];
   moist: boolean;
   quantity: number;
+  addons?: CakeAddonChoice[];
 }
 
 export interface CartQuoteLine {
@@ -251,12 +261,29 @@ export interface CartQuoteLine {
   issues: string[];
 }
 
+/** Preço da entrega calculado pelo servidor (ou o motivo por que não pode ser confirmada). */
+export interface CartQuoteDelivery {
+  available: boolean;
+  fee: string | null;
+  free: boolean;
+  zoneId: string | null;
+  zoneName: string | null;
+  issue: string | null;
+  /** Campo do formulário a que o problema pertence (`deliveryZoneId` | `fulfillment`). */
+  field: string | null;
+}
+
 export interface CartQuote {
   valid: boolean;
+  /** Soma dos artigos (sem entrega). */
   total: string;
   currency: 'AOA';
   lines: CartQuoteLine[];
   issues: string[];
+  /** Presente apenas quando o pedido incluiu `fulfillment: 'DELIVERY'`. */
+  delivery?: CartQuoteDelivery | null;
+  /** Artigos + entrega (igual a `total` sem entrega ou quando indisponível). */
+  grandTotal?: string;
 }
 
 /**
@@ -266,7 +293,13 @@ export interface CartQuote {
  * quantidades — nenhum preço é aceite de fora.
  */
 export function postCartQuote(
-  body: { productLines: CartQuoteProductLine[]; cakeLines: CartQuoteCakeLine[] },
+  body: {
+    productLines: CartQuoteProductLine[];
+    cakeLines: CartQuoteCakeLine[];
+    /** `DELIVERY` pede também o preço da entrega ao servidor. */
+    fulfillment?: Fulfillment;
+    deliveryZoneId?: string;
+  },
   signal?: AbortSignal,
 ): Promise<CartQuote> {
   return apiFetch<CartQuote>('/api/v1/public/cart/quote', {
@@ -338,6 +371,8 @@ export interface OrderItemView {
   lineTotal: string;
   /** Rótulos do bolo gerados pelo servidor (snapshot). */
   summary: string[];
+  /** Mensagens/dedicatórias escritas pelo cliente nos complementos. */
+  dedications?: { addon: string; message: string }[];
 }
 
 export interface OrderView {
@@ -398,6 +433,7 @@ export interface CreateOrderBody {
     extraIds: string[];
     moist: boolean;
     quantity: number;
+    addons?: CakeAddonChoice[];
   }[];
   /** Pontos de fidelização a resgatar (fase 6; o servidor valida saldo e limites). */
   pointsToSpend?: number;
@@ -482,10 +518,14 @@ export interface LoyaltySummary {
   allowPartialRedemption: boolean | null;
   welcome: LoyaltyWelcome | null;
   rewards: LoyaltyRewardStatus[];
+  /** Prazo de validade dos pontos em dias (nulo = não expiram). */
+  validityDays?: number | null;
+  /** Próxima data em que caducam pontos deste cliente. */
+  nextExpiry?: { expiresAt: string; points: number } | null;
 }
 
 export interface LoyaltyTransactionView {
-  type: 'EARN' | 'REDEEM' | 'ADJUSTMENT';
+  type: 'EARN' | 'REDEEM' | 'ADJUSTMENT' | 'EXPIRE';
   points: number;
   amountKz: string;
   rateKind: 'EARN_PERCENT' | 'POINT_VALUE';
@@ -620,6 +660,8 @@ export interface AdminOrderSummary {
   contactName: string;
   fulfillment: Fulfillment;
   paymentMethod: PaymentMethod;
+  /** Algum bolo leva mensagem/dedicatória escrita pelo cliente. */
+  hasDedication?: boolean;
 }
 
 export interface AdminOrderDetail {
@@ -863,7 +905,12 @@ function jsonBody(method: string, body: unknown): RequestInit {
 export interface DeliveryZone {
   id: string;
   name: string;
-  fee: string;
+  /** Nulo quando o preço ainda não foi definido. */
+  fee: string | null;
+  /** Entrega gratuita nesta zona. */
+  freeDelivery?: boolean;
+  /** Tem preço (ou é gratuita): só estas zonas podem ser escolhidas pelo cliente. */
+  priced?: boolean;
   freeOver: string | null;
   leadTime: string | null;
   schedule: string | null;
@@ -888,9 +935,23 @@ export interface PublicStoreSettings {
   termsRequired: boolean;
 }
 
+/** Modo global de cobrança da entrega ao domicílio. */
+export type DeliveryMode = 'FLAT' | 'ZONES' | 'FREE';
+
+export interface PublicDelivery {
+  mode: DeliveryMode | null;
+  flatFee: string | null;
+  flatFreeOver: string | null;
+  /** A entrega ao domicílio está operacional (preço configurado). */
+  available: boolean;
+  issue: string | null;
+}
+
 export interface StoreInfo {
   settings: PublicStoreSettings;
+  /** Zonas activas com preço — as únicas que o cliente pode escolher. */
   deliveryZones: DeliveryZone[];
+  delivery?: PublicDelivery;
 }
 
 /** Informação pública da loja (contactos, políticas, métodos, zonas). Nunca inclui dados bancários. */
@@ -1030,7 +1091,7 @@ export interface AdminCategory {
 
 export interface AdminIngredient {
   id: string;
-  kind: 'DOUGH' | 'FILLING' | 'EXTRA' | string;
+  kind: 'CAKE_BASE' | 'FILLING' | 'EXTRA' | 'ADDON' | string;
   slug: string;
   name: string;
   description: string;
@@ -1040,6 +1101,8 @@ export interface AdminIngredient {
   imageUrl: string | null;
   stockQty: number | null;
   available: boolean;
+  /** Complemento que admite mensagem/dedicatória (ex.: cartão). */
+  allowsMessage?: boolean;
 }
 
 export interface AdminIngredientBody {
@@ -1052,6 +1115,7 @@ export interface AdminIngredientBody {
   imageUrl: string | null;
   trackStock: boolean;
   stockQty: number | null;
+  allowsMessage?: boolean;
 }
 
 export const fetchAdminProducts = (signal?: AbortSignal) =>
@@ -1098,7 +1162,8 @@ export const saveAdminSettings = (changes: AdminSettings) =>
 
 export interface DeliveryZoneBody {
   name: string;
-  fee: string;
+  fee?: string;
+  freeDelivery?: boolean;
   freeOver?: string;
   leadTime?: string;
   schedule?: string;
@@ -1115,6 +1180,44 @@ export const saveAdminZone = (id: string | null, body: DeliveryZoneBody) =>
   );
 export const deleteAdminZone = (id: string) =>
   apiFetch<void>(`/api/v1/admin/delivery-zones/${id}`, { method: 'DELETE' });
+
+/** Configuração de entregas: modo global, preço fixo e se já está operacional. */
+export interface DeliveryConfig {
+  mode: DeliveryMode | null;
+  flatFee: string | null;
+  flatFreeOver: string | null;
+  ready: boolean;
+  problems: string[];
+}
+
+export const fetchAdminDeliveryConfig = (signal?: AbortSignal) =>
+  apiFetch<DeliveryConfig>('/api/v1/admin/delivery/config', { signal });
+export const saveAdminDeliveryConfig = (body: { mode: DeliveryMode; flatFee?: string; flatFreeOver?: string }) =>
+  apiFetch<DeliveryConfig>('/api/v1/admin/delivery/config', jsonBody('PUT', body));
+
+/* ----- Validade dos pontos de fidelização ----- */
+
+export interface PointsValidity {
+  /** Prazo em dias; nulo = sem prazo (os pontos não expiram). */
+  days: number | null;
+  presets: number[];
+  maxDays: number;
+  outstandingPoints: number;
+  expiringSoonPoints: number;
+}
+
+export interface PointsValidityPreview {
+  days: number | null;
+  pointsExpiringNow: number;
+  accountsAffected: number;
+}
+
+export const fetchPointsValidity = (signal?: AbortSignal) =>
+  apiFetch<PointsValidity>('/api/v1/admin/loyalty/validity', { signal });
+export const previewPointsValidity = (days: number, signal?: AbortSignal) =>
+  apiFetch<PointsValidityPreview>(`/api/v1/admin/loyalty/validity/preview?days=${days}`, { signal });
+export const savePointsValidity = (days: number | null) =>
+  apiFetch<PointsValidity>('/api/v1/admin/loyalty/validity', jsonBody('PUT', { days }));
 
 /* ----- Equipa (contas secundárias, papéis e permissões) ----- */
 

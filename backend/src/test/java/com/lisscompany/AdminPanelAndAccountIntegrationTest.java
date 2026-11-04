@@ -200,7 +200,7 @@ class AdminPanelAndAccountIntegrationTest {
         MockHttpSession customer = register("stock-cliente@example.com", "Stock Cliente");
         MockHttpSession owner = register("stock-guarda@example.com", "Stock Guarda");
         makeOwner("stock-guarda@example.com");
-        String productId = productId("bolo-no-pote-classico");
+        String productId = productId("bolo-no-pote-premium");
         setStock(productId, 5);
 
         // Encomenda reserva 3 unidades (ficam reservadas até pagamento).

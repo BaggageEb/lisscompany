@@ -124,7 +124,7 @@ class InventoryAndPaymentsIntegrationTest {
     @Test
     void outOfStockIsRejectedByQuoteAndNothingIsPersisted() throws Exception {
         MockHttpSession session = register("stock2@example.com", "SemStock");
-        String productId = productId("bolo-no-pote-classico");
+        String productId = productId("bolo-no-pote-premium");
         setStock(productId, 1);
 
         // Orçamento público: linha inválida com o motivo.
@@ -261,7 +261,7 @@ class InventoryAndPaymentsIntegrationTest {
     void reviewingWithTheSameIdempotencyKeyNeverDuplicatesEffects() throws Exception {
         MockHttpSession session = register("idem@example.com", "Idempotente");
         makeOwner("idem@example.com");
-        String productId = productId("bolo-no-pote-classico");
+        String productId = productId("bolo-no-pote-premium");
         setStock(productId, 10);
         int before = availableFor(productId);
         String number = createOrder(session, productId, 2);

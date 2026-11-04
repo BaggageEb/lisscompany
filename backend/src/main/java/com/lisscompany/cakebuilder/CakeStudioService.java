@@ -54,14 +54,17 @@ public class CakeStudioService {
             String priceDelta,
             String imageUrl,
             boolean available,
-            int displayOrder) {}
+            int displayOrder,
+            boolean allowsMessage) {}
 
     public record OptionsView(
             BaseProductView baseProduct,
             CakeStudioRules rules,
             List<IngredientView> cakeBases,
             List<IngredientView> fillings,
-            List<IngredientView> extras) {}
+            List<IngredientView> extras,
+            /** Complementos (velas, cartões…): independentes do limite de extras. */
+            List<IngredientView> addons) {}
 
     public record QuoteLine(String label, String amount) {}
 
@@ -73,7 +76,30 @@ public class CakeStudioService {
             String firstFillingId,
             String secondFillingId,
             List<String> extraIds,
-            boolean moist) {}
+            boolean moist,
+            List<AddonChoice> addons) {
+
+        public QuoteInput(
+                String cakeBaseId, String firstFillingId, String secondFillingId, List<String> extraIds,
+                boolean moist) {
+            this(cakeBaseId, firstFillingId, secondFillingId, extraIds, moist, List.of());
+        }
+    }
+
+    /** Limite de segurança de complementos distintos num bolo (não é o limite de extras). */
+    static final int MAX_ADDONS = 20;
+
+    /** Tamanho máximo da mensagem/dedicatória. */
+    public static final int MAX_MESSAGE_LENGTH = 200;
+
+    /** Mensagem limpa: sem caracteres de controlo, espaços aparados; vazia vira {@code null}. */
+    public static String cleanMessage(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String cleaned = raw.replaceAll("[\\p{Cntrl}&&[^\\n]]", " ").replaceAll("\\s*\\n\\s*", "\n").trim();
+        return cleaned.isEmpty() ? null : cleaned;
+    }
 
     /* ------------------------------ Opções ------------------------------- */
 
@@ -94,7 +120,8 @@ public class CakeStudioService {
                 CakeStudioRules.DEFAULT,
                 views(IngredientKind.CAKE_BASE),
                 views(IngredientKind.FILLING),
-                views(IngredientKind.EXTRA));
+                views(IngredientKind.EXTRA),
+                views(IngredientKind.ADDON));
     }
 
     private List<IngredientView> views(IngredientKind kind) {
@@ -107,7 +134,8 @@ public class CakeStudioService {
                         ingredient.getPriceDelta().toPlainString(),
                         ingredient.getImageUrl(),
                         ingredient.isAvailable(),
-                        ingredient.getDisplayOrder()))
+                        ingredient.getDisplayOrder(),
+                        ingredient.isAllowsMessage()))
                 .toList();
     }
 
@@ -145,6 +173,33 @@ public class CakeStudioService {
             }
         }
 
+        // Complementos: categoria independente — nunca contam para o limite de extras.
+        List<AddonChoice> addonChoices = input.addons() == null
+                ? List.of() : input.addons().stream().filter(Objects::nonNull).toList();
+        if (addonChoices.size() > MAX_ADDONS) {
+            issues.add("Demasiados complementos escolhidos.");
+        }
+        Set<String> seenAddons = new LinkedHashSet<>();
+        List<Ingredient> addons = new ArrayList<>();
+        for (AddonChoice choice : addonChoices.stream().limit(MAX_ADDONS).toList()) {
+            if (!seenAddons.add(String.valueOf(choice.id()))) {
+                issues.add("Cada complemento só pode ser escolhido uma vez.");
+                continue;
+            }
+            Ingredient addon = resolve(choice.id(), IngredientKind.ADDON, "Complemento", issues);
+            if (addon == null) {
+                continue;
+            }
+            String message = cleanMessage(choice.message());
+            if (message != null && !addon.isAllowsMessage()) {
+                issues.add("Complemento: «" + addon.getName() + "» não admite mensagem.");
+            } else if (message != null && message.length() > MAX_MESSAGE_LENGTH) {
+                issues.add("Complemento: a mensagem de «" + addon.getName() + "» excede "
+                        + MAX_MESSAGE_LENGTH + " caracteres.");
+            }
+            addons.add(addon);
+        }
+
         // Regra de recheios distintos (duas camadas, no máximo N distintos).
         Set<String> distinctFillings = new LinkedHashSet<>();
         for (Ingredient filling : new Ingredient[] { firstFilling, secondFilling }) {
@@ -170,6 +225,11 @@ public class CakeStudioService {
         for (Ingredient extra : extras) {
             total = total.add(extra.getPriceDelta());
             addIfNonZero(lines, extra);
+        }
+
+        for (Ingredient addon : addons) {
+            total = total.add(addon.getPriceDelta());
+            addIfNonZero(lines, addon);
         }
 
         return new QuoteView(issues.isEmpty(), money(total), "AOA", List.copyOf(lines), List.copyOf(issues));

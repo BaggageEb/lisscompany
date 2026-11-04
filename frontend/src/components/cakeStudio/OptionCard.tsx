@@ -5,7 +5,7 @@ import './cake-studio.css';
 
 interface OptionCardProps {
   option: IngredientOption;
-  kind: 'CAKE_BASE' | 'FILLING' | 'EXTRA';
+  kind: 'CAKE_BASE' | 'FILLING' | 'EXTRA' | 'ADDON';
   /** Para extras: escolha múltipla (checkbox). Para massa/recheio: rádio. */
   mode: 'radio' | 'checkbox';
   name: string;

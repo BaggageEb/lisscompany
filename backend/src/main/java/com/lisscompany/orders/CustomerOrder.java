@@ -110,6 +110,10 @@ public class CustomerOrder {
     @Column(name = "delivery_zone_name", length = 160)
     private String deliveryZoneName;
 
+    /** Algum bolo leva mensagem/dedicatória (a proprietária vê-o logo na lista). */
+    @Column(name = "has_dedication", nullable = false)
+    private boolean hasDedication;
+
     /** Janela de levantamento escolhida pelo cliente (texto livre, sem fuso inventado). */
     @Column(name = "pickup_slot", length = 120)
     private String pickupSlot;
@@ -319,6 +323,14 @@ public class CustomerOrder {
 
     public String getDeliveryZoneName() {
         return deliveryZoneName;
+    }
+
+    public boolean isHasDedication() {
+        return hasDedication;
+    }
+
+    public void setHasDedication(boolean hasDedication) {
+        this.hasDedication = hasDedication;
     }
 
     public void setDeliveryZoneName(String deliveryZoneName) {

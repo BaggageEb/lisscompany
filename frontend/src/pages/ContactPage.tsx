@@ -63,7 +63,7 @@ export function ContactPage() {
           <ul>
             {zones.map((zone) => (
               <li key={zone.id}>
-                <strong>{zone.name}</strong>: {formatKz(zone.fee)}
+                <strong>{zone.name}</strong>: {zone.freeDelivery || zone.fee === '0.00' ? 'Grátis' : formatKz(zone.fee ?? '0')}
                 {zone.freeOver ? ` (grátis a partir de ${formatKz(zone.freeOver)})` : ''}
                 {zone.leadTime || zone.schedule ? ` · ${[zone.leadTime, zone.schedule].filter(Boolean).join(' · ')}` : ''}
               </li>

@@ -43,11 +43,12 @@ public class CatalogAdminService {
 
     public record IngredientAdminView(
             String id, String kind, String slug, String name, String description, String priceDelta,
-            int displayOrder, boolean active, String imageUrl, Integer stockQty, boolean available) {}
+            int displayOrder, boolean active, String imageUrl, Integer stockQty, boolean available,
+            boolean allowsMessage) {}
 
     public record IngredientInput(
             String kind, String name, String description, String priceDelta, Integer displayOrder,
-            Boolean active, String imageUrl, Integer stockQty, Boolean trackStock) {}
+            Boolean active, String imageUrl, Integer stockQty, Boolean trackStock, Boolean allowsMessage) {}
 
     private final ProductRepository products;
     private final ProductCategoryRepository categories;
@@ -241,7 +242,7 @@ public class CatalogAdminService {
         try {
             kind = IngredientKind.valueOf(String.valueOf(input.kind()).trim().toUpperCase());
         } catch (IllegalArgumentException ex) {
-            errors.put("kind", "Escolha o tipo: massa, recheio ou extra.");
+            errors.put("kind", "Escolha o tipo: massa, recheio, extra ou complemento.");
         }
         String name = clean(input.name());
         if (name == null || name.length() < 2 || name.length() > 160) {
@@ -272,6 +273,7 @@ public class CatalogAdminService {
         ingredient.setActive(input.active() == null || input.active());
         ingredient.setImageUrl(clean(input.imageUrl()));
         ingredient.setStockQty(track ? input.stockQty() : null);
+        ingredient.setAllowsMessage(kind == IngredientKind.ADDON && Boolean.TRUE.equals(input.allowsMessage()));
         if (id == null) {
             ingredient.setSlug(uniqueIngredientSlug(name));
         }
@@ -286,7 +288,7 @@ public class CatalogAdminService {
         return new IngredientAdminView(
                 i.getId().toString(), i.getKind().name(), i.getSlug(), i.getName(), i.getDescription(),
                 i.getPriceDelta().setScale(2, RoundingMode.HALF_UP).toPlainString(), i.getDisplayOrder(), i.isActive(),
-                i.getImageUrl(), i.getStockQty(), i.isAvailable());
+                i.getImageUrl(), i.getStockQty(), i.isAvailable(), i.isAllowsMessage());
     }
 
     /* ------------------------------ Utilitários -------------------------- */

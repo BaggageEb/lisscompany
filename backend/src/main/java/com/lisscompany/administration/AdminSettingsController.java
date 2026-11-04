@@ -46,6 +46,18 @@ public class AdminSettingsController {
         return settings.update(changes, guard.current(Permissions.SETTINGS_MANAGE));
     }
 
+    /** Modo de entrega (preço fixo / por zonas / gratuita) e se já está operacional. */
+    @GetMapping("/delivery/config")
+    public DeliveryService.ConfigView deliveryConfig() {
+        guard.current(Permissions.SETTINGS_MANAGE);
+        return delivery.config();
+    }
+
+    @PutMapping("/delivery/config")
+    public DeliveryService.ConfigView updateDeliveryConfig(@RequestBody DeliveryService.ConfigInput input) {
+        return delivery.updateConfig(input, guard.current(Permissions.SETTINGS_MANAGE));
+    }
+
     @GetMapping("/delivery-zones")
     public List<DeliveryService.Zone> zones() {
         guard.current(Permissions.SETTINGS_MANAGE);

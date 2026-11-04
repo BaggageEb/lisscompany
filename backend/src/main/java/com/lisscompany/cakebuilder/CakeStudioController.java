@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * API pública do Cake Studio (sob {@code /api/v1/public/**}, sem sessão).
@@ -28,7 +29,12 @@ public class CakeStudioController {
             @NotBlank(message = "Escolha o primeiro recheio.") String firstFillingId,
             @NotBlank(message = "Escolha o segundo recheio.") String secondFillingId,
             List<String> extraIds,
-            boolean moist) {}
+            boolean moist,
+            @Valid @Size(max = 20, message = "Demasiados complementos.") List<AddonRequest> addons) {}
+
+    public record AddonRequest(
+            @NotBlank(message = "Complemento em falta.") String id,
+            @Size(max = 200, message = "Mensagem demasiado longa (máximo 200 caracteres).") String message) {}
 
     private final CakeStudioService service;
 
@@ -48,6 +54,8 @@ public class CakeStudioController {
                 request.firstFillingId(),
                 request.secondFillingId(),
                 request.extraIds(),
-                request.moist()));
+                request.moist(),
+                request.addons() == null ? List.of() : request.addons().stream()
+                        .map(a -> new com.lisscompany.cakebuilder.AddonChoice(a.id(), a.message())).toList()));
     }
 }

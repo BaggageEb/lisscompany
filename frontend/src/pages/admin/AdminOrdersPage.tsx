@@ -146,6 +146,7 @@ export function AdminOrdersPage() {
                     <span className="lc-admin__badges">
                       <Badge tone={orderState.tone}>{orderState.label}</Badge>
                       {payment && <Badge tone={payment.tone}>Pagamento: {payment.label}</Badge>}
+                      {order.hasDedication && <Badge tone="gold">Tem dedicatória</Badge>}
                     </span>
                     <span className="lc-admin__amount">{formatKz(order.total)}</span>
                   </div>

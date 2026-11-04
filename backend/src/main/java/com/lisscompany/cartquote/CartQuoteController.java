@@ -40,11 +40,19 @@ public class CartQuoteController {
             @NotBlank(message = "Escolha o segundo recheio.") String secondFillingId,
             List<String> extraIds,
             boolean moist,
-            @Min(value = 1, message = "Quantidade mínima: 1.") int quantity) {}
+            @Min(value = 1, message = "Quantidade mínima: 1.") int quantity,
+            @Valid @Size(max = 20, message = "Demasiados complementos.") List<AddonRequest> addons) {}
+
+    public record AddonRequest(
+            @NotBlank(message = "Complemento em falta.") String id,
+            @Size(max = 200, message = "Mensagem demasiado longa (máximo 200 caracteres).") String message) {}
 
     public record QuoteRequest(
             @Valid @Size(max = 100, message = "Carrinho demasiado longo.") List<ProductLineRequest> productLines,
-            @Valid @Size(max = 100, message = "Carrinho demasiado longo.") List<CakeLineRequest> cakeLines) {}
+            @Valid @Size(max = 100, message = "Carrinho demasiado longo.") List<CakeLineRequest> cakeLines,
+            /** Modalidade escolhida (DELIVERY pede também o preço da entrega). */
+            String fulfillment,
+            @Size(max = 60) String deliveryZoneId) {}
 
     private final CartQuoteService service;
 
@@ -71,9 +79,13 @@ public class CartQuoteController {
                                         line.secondFillingId(),
                                         line.extraIds(),
                                         line.moist(),
-                                        line.quantity()))
+                                        line.quantity(),
+                                        line.addons() == null ? List.of() : line.addons().stream()
+                                                .map(a -> new com.lisscompany.cakebuilder.AddonChoice(a.id(), a.message()))
+                                                .toList()))
                                 .toList();
 
-        return service.quote(new CartQuoteService.CartInput(productLines, cakeLines));
+        return service.quote(new CartQuoteService.CartInput(
+                productLines, cakeLines, "DELIVERY".equalsIgnoreCase(request.fulfillment()), request.deliveryZoneId()));
     }
 }

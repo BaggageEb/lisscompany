@@ -40,6 +40,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: 'Loja',
     items: [
+      { to: '/admin/entregas', label: 'Configuração de entregas', icon: '🚚', permission: 'SETTINGS_MANAGE' },
       { to: '/admin/definicoes', label: 'Definições', icon: '⚙', permission: 'SETTINGS_MANAGE' },
       { to: '/admin/equipa', label: 'Equipa e acessos', icon: '☷', permission: 'STAFF_MANAGE' },
       { to: '/admin/auditoria', label: 'Auditoria', icon: '☰', permission: 'AUDIT_VIEW' },
